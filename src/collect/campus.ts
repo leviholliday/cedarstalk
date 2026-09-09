@@ -18,10 +18,17 @@ import { finishSweep, startSweep } from "../store/history";
 import { type CampusMap, replaceCampus } from "../store/campus";
 import buildingsTsv from "./assets/buildings.tsv" with { type: "text" };
 import tourJson from "./assets/tour-buildings.json" with { type: "text" };
+import { fetchTour, tourKey } from "./tour";
 
 /** South, west, north, east. Cedarville University and a little air around it. */
 const BBOX = [39.7385, -83.8155, 39.7525, -83.7975] as const;
-const OVERPASS = "https://overpass-api.de/api/interpreter";
+// Two mirrors, because the main one refuses anonymous clients when it is busy
+// and a campus map is not worth a failed run.
+const OVERPASS = [
+  "https://overpass-api.de/api/interpreter",
+  "https://overpass.kumi.systems/api/interpreter",
+];
+const USER_AGENT = "cedarengine (github.com/taciturnaxolotl/cedarengine)";
 
 /**
  * Ways you can actually walk, and how much you mind walking them. A footpath
@@ -105,13 +112,65 @@ export function occupiedBuildings(): { label: string; kind: string }[] {
 }
 
 export async function fetchOsm(): Promise<{ elements: OsmElement[] }> {
-  const response = await fetch(OVERPASS, {
-    method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ data: QUERY }),
-  });
-  if (!response.ok) throw new Error(`overpass returned HTTP ${response.status}`);
-  return (await response.json()) as { elements: OsmElement[] };
+  let last = "";
+  for (const endpoint of OVERPASS) {
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        "user-agent": USER_AGENT,
+      },
+      body: new URLSearchParams({ data: QUERY }),
+    });
+    if (response.ok) return (await response.json()) as { elements: OsmElement[] };
+    last = `${new URL(endpoint).host} returned HTTP ${response.status}`;
+  }
+  throw new Error(`overpass is not answering: ${last}`);
+}
+
+/**
+ * The directory's own shorthand, expanded.
+ *
+ * "Ctr for Bib and Theo Studies" and "Center for Biblical and Theological
+ * Studies" are the same building, and the curated list covers the ones that
+ * matter most. This catches the rest: normalise both names, then accept the
+ * best word-overlap above a threshold. Below it, a label is better left
+ * unmapped than pinned to the wrong building.
+ */
+const ABBREVIATIONS: [RegExp, string][] = [
+  [/\bctr\b|\bcntr\b/g, "center"],
+  [/\bbldg\b/g, "building"],
+  [/\bapt\b/g, "apartment"],
+  [/\badmin\b/g, "administration"],
+  [/\bbib\b/g, "biblical"],
+  [/\btheo\b/g, "theological"],
+  [/\bcomm\b/g, "communication"],
+  [/\bbus\b/g, "business"],
+  [/\bsci\b/g, "science"],
+  [/\brec\b/g, "recreation"],
+  [/\bfit\b/g, "fitness"],
+  [/\beng\b|\begr\b/g, "engineering"],
+];
+
+const words = (name: string): Set<string> => {
+  let text = name.toLowerCase().replace(/[^a-z0-9]+/g, " ");
+  for (const [pattern, full] of ABBREVIATIONS) text = text.replace(pattern, full);
+  return new Set(text.split(" ").filter((word) => word && word !== "and" && word !== "the"));
+};
+
+export function bestName(label: string, candidates: Iterable<string>): string | null {
+  const wanted = words(label);
+  if (!wanted.size) return null;
+  let best: { name: string; score: number } | null = null;
+
+  for (const candidate of candidates) {
+    const other = words(candidate);
+    let shared = 0;
+    for (const word of wanted) if (other.has(word)) shared++;
+    const score = shared / (wanted.size + other.size - shared);
+    if (!best || score > best.score) best = { name: candidate, score };
+  }
+  return best && best.score >= 0.6 ? best.name : null;
 }
 
 /**
@@ -225,9 +284,10 @@ export function buildMap(
   for (const { label, osm: name, kind } of labels) {
     let ring: [number, number][] | null = null;
     let source: "osm" | "tour" = "osm";
-    if (name && byName.has(name)) {
-      ring = byName.get(name)!.ring;
-      focus.add(name);
+    const matched = name && byName.has(name) ? name : bestName(label, byName.keys());
+    if (matched && byName.has(matched)) {
+      ring = byName.get(matched)!.ring;
+      focus.add(matched);
     } else if (extra[label]) {
       ring = extra[label]!.ring.map(([lat, lon]) => project({ lat, lon }));
       buildings.push({ name: label, ring, fromTour: true });
@@ -258,7 +318,7 @@ export function buildMap(
     ];
     anchors[label] = {
       node: best,
-      name: name ?? label,
+      name: matched ?? name ?? label,
       kind: kind ?? "unknown",
       source,
       centre,
@@ -334,7 +394,11 @@ function largestComponent(count: number, adjacency: Map<number, Map<number, numb
  * Fetch, build and store the campus. The label list comes from the directory,
  * so a building nobody lives or works in is not something we go looking for.
  */
-export async function collectCampus(): Promise<{ buildings: number; missing: string[] }> {
+export async function collectCampus(): Promise<{
+  buildings: number;
+  fromTour: number;
+  missing: string[];
+}> {
   const sweep = startSweep("campus", "cli");
   const curated = new Map(labelMap().map((row) => [row.label, row.osm]));
   const kinds = new Map<string, string>();
@@ -343,18 +407,34 @@ export async function collectCampus(): Promise<{ buildings: number; missing: str
     kinds.set(label, held && held !== kind ? "both" : kind);
   }
 
-  // Everything the curated map knows about, plus anything the directory holds
-  // that it does not — those land in `missing`, which is the to-do list.
-  const labels = [
-    ...new Set([...curated.keys(), ...kinds.keys()]),
-  ].map((label) => ({
+  // Everything the curated map knows about, plus every building the directory
+  // actually puts somebody in.
+  const labels = [...new Set([...curated.keys(), ...kinds.keys()])].map((label) => ({
     label,
     osm: curated.get(label) ?? label,
     kind: kinds.get(label) ?? "unknown",
   }));
 
+  // The tour draws the dorms OSM never traced. Its outlines are the fallback,
+  // so they are gathered before the map is built rather than after it fails.
+  const extra: Record<string, { ring: [number, number][] }> = { ...tourBuildings() };
+  let fromTour = 0;
+  try {
+    const tour = await fetchTour();
+    for (const { label } of labels) {
+      const drawn = tour.buildings.get(tourKey(label));
+      if (drawn && !extra[label]) {
+        extra[label] = { ring: drawn.ring };
+        fromTour++;
+      }
+    }
+  } catch {
+    // The tour is a nicety. A campus without the six unmapped halls still
+    // routes, and the cached outlines cover the ones that matter most.
+  }
+
   const osm = await fetchOsm();
-  const map = buildMap(osm, labels, tourBuildings());
+  const map = buildMap(osm, labels, extra);
   const stored = replaceCampus(map);
 
   finishSweep(sweep, {
@@ -363,5 +443,5 @@ export async function collectCampus(): Promise<{ buildings: number; missing: str
     complete: true,
     note: map.missing.length ? `${map.missing.length} unmapped` : undefined,
   });
-  return { buildings: stored, missing: map.missing };
+  return { buildings: stored, fromTour, missing: map.missing };
 }

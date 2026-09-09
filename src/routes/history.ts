@@ -49,7 +49,18 @@ export const historyRoutes: RouteDef[] = [
     summary: "Booklist churn per term: courses added and dropped after the first look",
     handler: () =>
       json({
-        terms: harvestTerms().map((term) => ({ ...term, ...termChurn(term.term) })),
+        terms: harvestTerms().map((term) => {
+          const churn = termChurn(term.term);
+          return {
+            ...term,
+            // `students` means two things here — how many booklists we hold, and
+            // how many of them moved — so the churning ones get their own name.
+            changed: churn.students,
+            coursesAdded: churn.added,
+            coursesDropped: churn.removed,
+            revisions: churn.changes,
+          };
+        }),
       }),
   },
 ];
