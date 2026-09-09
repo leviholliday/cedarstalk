@@ -6,6 +6,8 @@
  * token is a server that hands them to anyone who finds the port.
  */
 
+import { catalogYear } from "./lib/terms";
+
 const env = (name: string, fallback?: string): string => {
   const value = process.env[name]?.trim();
   if (value) return value;
@@ -13,17 +15,11 @@ const env = (name: string, fallback?: string): string => {
   throw new Error(`${name} is required — copy .env.example to .env and fill it in`);
 };
 
-/** August starts the academic year, so "2026-2027" is right from then on. */
-export function currentCatalogYear(now = new Date()): string {
-  const start = now.getMonth() >= 7 ? now.getFullYear() : now.getFullYear() - 1;
-  return `${start}-${start + 1}`;
-}
-
 export const config = {
   databasePath: env("DATABASE_PATH", "data/cedarengine.db"),
   port: Number(env("PORT", "3000")),
   hostname: env("HOST", "127.0.0.1"),
-  catalogYear: env("CATALOG_YEAR", currentCatalogYear()),
+  catalogYear: env("CATALOG_YEAR", catalogYear()),
   /** Read lazily: the CLI collectors need a database, not a token. */
   get bearerToken() {
     return env("BEARER_TOKEN");
