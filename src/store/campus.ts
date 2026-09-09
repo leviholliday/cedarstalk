@@ -13,7 +13,7 @@ export interface Anchor {
   node: number;
   name: string;
   kind: string;
-  source: "osm" | "tour";
+  source: "osm" | "tour" | "pin";
   centre: [number, number];
   lat: number;
   lon: number;

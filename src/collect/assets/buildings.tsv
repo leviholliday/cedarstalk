@@ -32,3 +32,13 @@ Murdoch Hall
 Murphy Hall
 Rickard Hall
 St Clair Hall
+# Buildings the directory writes under a name no source shares. Gromacki is the
+# second campus townhouse, built in 2013 and named in 2024, which OSM still
+# carries as "Townhouse 2"; the rest are the directory's abbreviations.
+Ambassador	Ambassador Hall
+Engineering Project Lab	Engineering Projects Laboratory
+Gromacki Hall	Townhouse 2
+Davis House	Davis House
+Fit-Rec Center	Fitness Recreation Center
+Carnegie Cntr for Visual Arts	Carnegie Center for the Visual Arts
+Graduate and Teaching Services	Graduate and Teaching Services

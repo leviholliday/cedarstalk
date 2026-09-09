@@ -17,11 +17,19 @@ import { db } from "../db";
 import { type CampusMap, replaceCampus } from "../store/campus";
 import { finishSweep, startSweep } from "../store/history";
 import buildingsTsv from "./assets/buildings.tsv" with { type: "text" };
+import pinsTsv from "./assets/pins.tsv" with { type: "text" };
 import tourJson from "./assets/tour-buildings.json";
 import { fetchTour, tourKey } from "./tour";
 
-/** South, west, north, east. Cedarville University and a little air around it. */
-const BBOX = [39.7385, -83.8155, 39.7525, -83.7975] as const;
+/**
+ * South, west, north, east.
+ *
+ * Wider than it looks like it needs to be, deliberately. The obvious box around
+ * the academic core cuts off the townhouses and residence-life centres to the
+ * west, the security house to the north, and the operations centre past both —
+ * three hundred people housed or working outside a box drawn by eye.
+ */
+const BBOX = [39.736, -83.8215, 39.7595, -83.796] as const;
 // Two mirrors, because the main one refuses anonymous clients when it is busy
 // and a campus map is not worth a failed run.
 const OVERPASS = [
@@ -69,7 +77,7 @@ interface OsmPoint {
   lon: number;
 }
 
-interface OsmElement {
+export interface OsmElement {
   tags?: Record<string, string>;
   geometry?: OsmPoint[];
   nodes?: number[];
@@ -91,6 +99,32 @@ export function labelMap(): { label: string; osm: string | null }[] {
     const [label, osm] = trimmed.split("\t");
     if (!label || label === "label") continue;
     rows.push({ label, osm: osm?.trim() || null });
+  }
+  return rows;
+}
+
+export interface Pin {
+  label: string;
+  lat: number;
+  lon: number;
+  note: string;
+}
+
+/**
+ * Buildings nobody draws, positioned rather than outlined.
+ *
+ * The last resort, and deliberately a separate file from the name map: a pin
+ * is a claim about where something is, not a claim about what it is called,
+ * and the two go stale for different reasons.
+ */
+export function pins(): Pin[] {
+  const rows: Pin[] = [];
+  for (const line of pinsTsv.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const [label, lat, lon, note] = trimmed.split("\t");
+    if (!label || label === "label" || !lat || !lon) continue;
+    rows.push({ label, lat: Number(lat), lon: Number(lon), note: note ?? "" });
   }
   return rows;
 }
@@ -181,6 +215,7 @@ export function buildMap(
   osm: { elements: OsmElement[] },
   labels: { label: string; osm: string | null; kind?: string }[],
   extra: Record<string, { ring: [number, number][] }> = {},
+  pinned: Record<string, Pin> = {},
 ): CampusMap {
   const points = osm.elements.flatMap((e) => e.geometry ?? []);
   if (!points.length) throw new Error("the extract has no geometry in it");
@@ -283,7 +318,7 @@ export function buildMap(
 
   for (const { label, osm: name, kind } of labels) {
     let ring: [number, number][] | null = null;
-    let source: "osm" | "tour" = "osm";
+    let source: "osm" | "tour" | "pin" = "osm";
     const matched = name && byName.has(name) ? name : bestName(label, byName.keys());
     if (matched && byName.has(matched)) {
       ring = byName.get(matched)!.ring;
@@ -293,6 +328,13 @@ export function buildMap(
       buildings.push({ name: label, ring, fromTour: true });
       focus.add(label);
       source = "tour";
+    } else if (pinned[label]) {
+      // A pin has no footprint, so its "ring" is the single point it is. The
+      // anchor search below reads it the same way and lands on the nearest
+      // path node, which is all an outline was ever used for.
+      const pin = pinned[label]!;
+      ring = [project({ lat: pin.lat, lon: pin.lon })];
+      source = "pin";
     }
     if (!ring) {
       missing.push(label);
@@ -397,6 +439,7 @@ function largestComponent(count: number, adjacency: Map<number, Map<number, numb
 export async function collectCampus(): Promise<{
   buildings: number;
   fromTour: number;
+  pinned: number;
   missing: string[];
 }> {
   const sweep = startSweep("campus", "cli");
@@ -433,8 +476,10 @@ export async function collectCampus(): Promise<{
     // routes, and the cached outlines cover the ones that matter most.
   }
 
+  const pinned = Object.fromEntries(pins().map((pin) => [pin.label, pin]));
+
   const osm = await fetchOsm();
-  const map = buildMap(osm, labels, extra);
+  const map = buildMap(osm, labels, extra, pinned);
   const stored = replaceCampus(map);
 
   finishSweep(sweep, {
@@ -443,5 +488,10 @@ export async function collectCampus(): Promise<{
     complete: true,
     note: map.missing.length ? `${map.missing.length} unmapped` : undefined,
   });
-  return { buildings: stored, fromTour, missing: map.missing };
+  return {
+    buildings: stored,
+    fromTour,
+    pinned: Object.values(map.anchors).filter((anchor) => anchor.source === "pin").length,
+    missing: map.missing,
+  };
 }

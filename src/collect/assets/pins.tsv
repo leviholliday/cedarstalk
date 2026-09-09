@@ -1,0 +1,26 @@
+# Buildings no source draws.
+#
+# OpenStreetMap has never traced them and the campus tour predates them, so
+# there is no outline to be had — only a position, and these were derived
+# rather than guessed. The university's printed campus map keys every building
+# to a label; fitting those label positions against the fifty buildings we
+# already have coordinates for gives an affine transform good to about eight
+# metres across thirty-one anchors, and these are what it puts the rest at.
+#
+# Where OSM has an untraced building in the right place, the pin was moved onto
+# it: the Cedar Park pin sits on the apartments at Kirkmont Court, and the OPS
+# pins sit in the university's service yard, both of which OSM draws but leaves
+# unnamed. The four College View blocks share one pin because nothing on file
+# tells them apart; they are one site about forty metres across.
+#
+# A pin is a point, not a footprint. Routing anchors to the walking-graph node
+# nearest it, which is what an outline would have given anyway.
+label	lat	lon	note
+College View Apartment A	39.75262	-83.80822	campus map, fitted; the four blocks share a pin
+College View Apartment B	39.75262	-83.80822	campus map, fitted; the four blocks share a pin
+College View Apartment C	39.75262	-83.80822	campus map, fitted; the four blocks share a pin
+College View Apartment D	39.75262	-83.80822	campus map, fitted; the four blocks share a pin
+Cedar Park	39.73730	-83.80227	4 Kirkmont Court, on the apartments OSM leaves unnamed
+OPS A - Automotive Shop	39.74965	-83.82027	the university service yard, west of the dorms
+OPS B - Grounds Shop	39.74965	-83.82027	the university service yard, west of the dorms
+OPS C - Operations Center	39.74965	-83.82027	the university service yard, west of the dorms

@@ -144,6 +144,7 @@ async function collect(what: string | undefined): Promise<void> {
       const result = await collectCampus();
       say("buildings", n(result.buildings));
       if (result.fromTour) say("from the tour", n(result.fromTour));
+      if (result.pinned) say("pinned", n(result.pinned));
       if (result.missing.length) {
         say("unmapped", n(result.missing.length));
         console.error(dim(`  ${result.missing.join(", ")}`));

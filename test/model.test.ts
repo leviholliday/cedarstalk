@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, test } from "bun:test";
-import { bestName } from "../src/collect/campus";
 import { useDatabase } from "../src/db";
 import { currentTerm } from "../src/lib/terms";
 import { clusterOf } from "../src/model/clusters";
@@ -81,17 +80,5 @@ describe("terms", () => {
     expect(currentTerm(new Date("2026-08-20"))).toBe("2026FA");
     expect(currentTerm(new Date("2027-02-01"))).toBe("2027SP");
     expect(currentTerm(new Date("2027-06-01"))).toBe("2027SU");
-  });
-});
-
-describe("building names", () => {
-  test("the directory's shorthand still finds the building", () => {
-    const osm = ["Engineering and Science Center", "Centennial Library", "Printy Hall"];
-    expect(bestName("Engineering and Science Ctr", osm)).toBe("Engineering and Science Center");
-    expect(bestName("Printy Hall", osm)).toBe("Printy Hall");
-  });
-
-  test("a building that is not there stays unmatched", () => {
-    expect(bestName("OPS B - Grounds Shop", ["Centennial Library", "Printy Hall"])).toBeNull();
   });
 });

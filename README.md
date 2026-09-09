@@ -106,9 +106,24 @@ and `evaluate` logs every run so the climb is visible.
 
 `collect campus` pulls building outlines and every footpath, stair and service
 drive off OpenStreetMap, then anchors each one to the graph node nearest its
-edge — a door, near enough. The six halls OSM never traced come from
-Cedarville's own campus tour, whose polygons are fitted to real coordinates
-through its sixty-odd GPS markers.
+edge — a door, near enough.
+
+Three sources, in order of how much they know. OpenStreetMap draws most of it.
+The halls OSM never traced come from Cedarville's own campus tour, whose
+polygons are fitted to real coordinates through its sixty-odd GPS markers. What
+neither has — the College View blocks, Cedar Park, the operations yard — is
+pinned in `src/collect/assets/pins.tsv`, positioned by fitting the university's
+printed campus map against the fifty buildings already placed, which lands
+within about eight metres across thirty-one anchors. Every pin carries a note
+saying where it came from.
+
+Two things worth knowing about that. The bounding box is drawn generously on
+purpose: the obvious box around the academic core cuts off the townhouses, the
+residence-life centres and the operations yard, which is three hundred people.
+And the directory's own name for a building is often nobody else's — Gromacki
+Hall is the 2013 townhouse OSM still calls "Townhouse 2" — so
+`src/collect/assets/buildings.tsv` maps the directory's shorthand onto the name
+each source uses, with fuzzy matching as the fallback rather than the rule.
 
 Since everybody in the directory already carries a dorm or an office, that is
 all it takes to put the whole population on the map:
