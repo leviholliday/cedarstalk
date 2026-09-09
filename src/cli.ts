@@ -17,9 +17,9 @@
  */
 
 import { writeFileSync } from "node:fs";
-import { crawlAllCourses, crawlTerm, collectRule, availableTerms } from "./collect/catalog";
-import { collectCampus } from "./collect/campus";
 import { crawlBook } from "./collect/book";
+import { collectCampus } from "./collect/campus";
+import { availableTerms, collectRule, crawlAllCourses, crawlTerm } from "./collect/catalog";
 import { sweepDirectory } from "./collect/directory";
 import { buildHarvester, ingestFile } from "./collect/harvest";
 import { importAll } from "./collect/import";
@@ -29,13 +29,12 @@ import { catalogYear, currentTerm } from "./lib/terms";
 import { evaluate } from "./model/evaluate";
 import { guessAll, guessFor } from "./model/guess";
 import { forgetModel } from "./model/major";
-import { termStats } from "./store/catalog";
 import { buildings } from "./store/campus";
+import { termStats } from "./store/catalog";
 import { harvestTerms } from "./store/harvest";
 import { recentSweeps } from "./store/history";
 import { findByName, peopleStats } from "./store/people";
-import { replaceYear } from "./store/programs";
-import { latestYear, programYears } from "./store/programs";
+import { latestYear, programYears, replaceYear } from "./store/programs";
 
 const argv = process.argv.slice(2);
 const positional = argv.filter((arg) => !arg.startsWith("--"));
@@ -88,7 +87,10 @@ async function collect(what: string | undefined): Promise<void> {
       if (result.complete) say("departed", n(result.vanished));
       say("requests", n(result.requests));
       say("elapsed", `${Math.round(result.elapsedMs / 1000)}s`);
-      say("coverage", result.complete ? "complete" : result.expired ? "session expired" : "partial");
+      say(
+        "coverage",
+        result.complete ? "complete" : result.expired ? "session expired" : "partial",
+      );
       if (!result.complete && !result.expired) {
         console.error(
           dim("  a partial sweep cannot retire anyone; pass --refresh to sweep from scratch"),
@@ -104,7 +106,8 @@ async function collect(what: string | undefined): Promise<void> {
       }
       if (has("all")) {
         const courses = await crawlAllCourses({
-          onProgress: (p) => progress(`${blue("every course")}  page ${p.page}/${p.pages}  ${n(p.items)}`),
+          onProgress: (p) =>
+            progress(`${blue("every course")}  page ${p.page}/${p.pages}  ${n(p.items)}`),
         });
         endProgress();
         say("courses", n(courses));
@@ -125,7 +128,8 @@ async function collect(what: string | undefined): Promise<void> {
     case "book": {
       const year = positional[1] ?? catalogYear();
       const book = await crawlBook(year, {
-        onProgress: (p) => progress(`${pink(year)}  page ${p.page}/${p.pages}  ${p.programs} programs`),
+        onProgress: (p) =>
+          progress(`${pink(year)}  page ${p.page}/${p.pages}  ${p.programs} programs`),
       });
       endProgress();
       replaceYear(year, book.programs, book.fetchedAt);
@@ -258,7 +262,14 @@ async function main(): Promise<void> {
       const top = Number(flag("top", "3"));
       if (has("all")) {
         const rows: unknown[][] = [
-          ["id", "name", "class", "terms", "signal", ...Array.from({ length: top }, (_, i) => [`guess${i + 1}`, `pct${i + 1}`]).flat()],
+          [
+            "id",
+            "name",
+            "class",
+            "terms",
+            "signal",
+            ...Array.from({ length: top }, (_, i) => [`guess${i + 1}`, `pct${i + 1}`]).flat(),
+          ],
         ];
         for (const student of guessAll(top, flag("year"))) {
           rows.push([

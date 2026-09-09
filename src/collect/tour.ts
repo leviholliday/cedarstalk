@@ -43,16 +43,19 @@ const pointsIn = (block: string): [number, number][] =>
 /** Matching key: the tour writes "St. Clair Hall" where the directory writes "St Clair Hall". */
 export const tourKey = (title: string) => title.toLowerCase().replace(/[^a-z0-9]/g, "");
 
-function fitPlane(anchors: Anchor[], valueOf: (anchor: Anchor) => number): [number, number, number] {
+function fitPlane(
+  samples: Anchor[],
+  component: (anchor: Anchor) => number,
+): [number, number, number] {
   const A = [
     [0, 0, 0],
     [0, 0, 0],
     [0, 0, 0],
   ];
   const B = [0, 0, 0];
-  for (const anchor of anchors) {
+  for (const anchor of samples) {
     const row = [anchor.x, anchor.y, 1];
-    const value = valueOf(anchor);
+    const value = component(anchor);
     for (let i = 0; i < 3; i++) {
       for (let j = 0; j < 3; j++) A[i]![j]! += row[i]! * row[j]!;
       B[i]! += row[i]! * value;
@@ -125,10 +128,10 @@ export function parseTour(xml: string): TourFit {
     if (buildings.has(key)) continue;
     buildings.set(key, {
       title,
-      ring: ring.map(project).map((p) => [
-        Number(p.lat.toFixed(6)),
-        Number(p.lon.toFixed(6)),
-      ]) as [number, number][],
+      ring: ring.map(project).map((p) => [Number(p.lat.toFixed(6)), Number(p.lon.toFixed(6))]) as [
+        number,
+        number,
+      ][],
     });
   }
 

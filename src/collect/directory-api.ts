@@ -59,7 +59,10 @@ const PLIST = `<?xml version="1.0" encoding="UTF-8"?>
 export async function sessionCookie({
   cookieFile,
   log = console.error,
-}: { cookieFile?: string; log?: (message: string) => void } = {}): Promise<string> {
+}: {
+  cookieFile?: string;
+  log?: (message: string) => void;
+} = {}): Promise<string> {
   const fromEnv = process.env.DIRECTORY_COOKIE?.trim();
   if (fromEnv) return fromEnv;
 

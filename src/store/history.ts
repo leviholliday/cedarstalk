@@ -71,9 +71,7 @@ export function bumpSweep(id: number, tally: SweepTally): void {
 export function finishSweep(id: number, tally: SweepTally = {}): void {
   bumpSweep(id, tally);
   db()
-    .query(
-      "UPDATE sweeps SET finished_at = ?, complete = ?, note = COALESCE(?, note) WHERE id = ?",
-    )
+    .query("UPDATE sweeps SET finished_at = ?, complete = ?, note = COALESCE(?, note) WHERE id = ?")
     .run(new Date().toISOString(), tally.complete ? 1 : 0, tally.note ?? null, id);
 }
 

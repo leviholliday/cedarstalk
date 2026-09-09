@@ -54,8 +54,7 @@ export const majorRoutes: RouteDef[] = [
       { name: "source", description: "Only labels from this file" },
       { name: "year", description: "Catalog year" },
     ],
-    handler: (_request, url) =>
-      json(evaluate({ source: q(url, "source"), year: q(url, "year") })),
+    handler: (_request, url) => json(evaluate({ source: q(url, "source"), year: q(url, "year") })),
   },
   {
     method: "GET",

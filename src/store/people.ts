@@ -189,9 +189,7 @@ export function upsertPeople(rows: DirectoryRow[], at = new Date().toISOString()
 export function retireUnseen(since: string): number {
   const database = db();
   const gone = database
-    .query<{ id: string }, [string]>(
-      "SELECT id FROM people WHERE present = 1 AND last_seen < ?",
-    )
+    .query<{ id: string }, [string]>("SELECT id FROM people WHERE present = 1 AND last_seen < ?")
     .all(since);
 
   const event = database.query(

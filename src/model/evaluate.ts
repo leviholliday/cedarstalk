@@ -33,7 +33,11 @@ export function evaluate({
   source,
   year,
   record = true,
-}: { source?: string; year?: string; record?: boolean } = {}): Evaluation {
+}: {
+  source?: string;
+  year?: string;
+  record?: boolean;
+} = {}): Evaluation {
   const engine = model(year);
   const labels = allLabels().filter((l) => !source || l.source === source);
   const terms = harvestTerms()
@@ -67,7 +71,8 @@ export function evaluate({
     if (hitExact) exact++;
     if (hitTop3) top3++;
     if (hitCluster) cluster++;
-    if (!hitTop3) misses.push({ studentId: label.studentId, known: known.join(" + "), guessed: first });
+    if (!hitTop3)
+      misses.push({ studentId: label.studentId, known: known.join(" + "), guessed: first });
   }
 
   const rate = (n: number) => (scored ? n / scored : 0);

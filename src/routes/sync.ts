@@ -50,9 +50,8 @@ interface BooklistBody {
 }
 
 const sweepStartedAt = (id: number): string | null =>
-  db()
-    .query<{ started_at: string }, [number]>("SELECT started_at FROM sweeps WHERE id = ?")
-    .get(id)?.started_at ?? null;
+  db().query<{ started_at: string }, [number]>("SELECT started_at FROM sweeps WHERE id = ?").get(id)
+    ?.started_at ?? null;
 
 export const syncRoutes: RouteDef[] = [
   {
@@ -146,7 +145,7 @@ export const syncRoutes: RouteDef[] = [
         });
       }
 
-      return json({ accepted: results.length, added, changed, vanished, done: settled, ...plan });
+      return json({ ...plan, accepted: results.length, added, changed, vanished, done: settled });
     },
   },
   {
@@ -174,7 +173,7 @@ export const syncRoutes: RouteDef[] = [
       if (payload.sweep && plan.remaining === 0) {
         finishSweep(payload.sweep, { complete: true, note: term });
       }
-      return json({ term, ...tally, ...plan, done: plan.remaining === 0 });
+      return json({ ...plan, ...tally, term, done: plan.remaining === 0 });
     },
   },
 ];

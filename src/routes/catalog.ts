@@ -9,7 +9,7 @@ import {
   searchSections,
   termStats,
 } from "../store/catalog";
-import { listPrograms, latestYear, programByPage, programYears } from "../store/programs";
+import { latestYear, listPrograms, programByPage, programYears } from "../store/programs";
 import type { RouteDef } from "./types";
 
 const parsed = (payload: string) => JSON.parse(payload);

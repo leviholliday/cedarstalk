@@ -29,8 +29,7 @@ export interface HarvesterOptions {
 /** The Tampermonkey harvester for one term, as text. */
 export function buildHarvester(options: HarvesterOptions): { script: string; ids: string[] } {
   const ids =
-    options.ids ??
-    studentIds(options.types ?? ["UG", "UGO", "GS", "P4"], options.studentClass);
+    options.ids ?? studentIds(options.types ?? ["UG", "UGO", "GS", "P4"], options.studentClass);
   const script = template
     .replace("__IDS__", JSON.stringify(ids))
     .replaceAll("__TERM__", options.term);

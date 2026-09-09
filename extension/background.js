@@ -150,8 +150,14 @@ function harvestInPage(ids, delayMs) {
   const refreshToken = async () => {
     try {
       const waf = window.AwsWafIntegration;
-      if (waf?.getToken) return (await waf.getToken(), true);
-      if (waf?.forceRefreshToken) return (await waf.forceRefreshToken(), true);
+      if (waf?.getToken) {
+        await waf.getToken();
+        return true;
+      }
+      if (waf?.forceRefreshToken) {
+        await waf.forceRefreshToken();
+        return true;
+      }
     } catch {}
     return false;
   };
@@ -161,10 +167,9 @@ function harvestInPage(ids, delayMs) {
     let consecutive = 0;
     for (const id of ids) {
       try {
-        const response = await fetch(
-          `/textbook/index/books?student_id=${id}&_=${Date.now()}`,
-          { headers: { "x-requested-with": "XMLHttpRequest" } },
-        );
+        const response = await fetch(`/textbook/index/books?student_id=${id}&_=${Date.now()}`, {
+          headers: { "x-requested-with": "XMLHttpRequest" },
+        });
         const text = await response.text();
         // The WAF answers with a challenge page rather than an error status.
         if (!text.includes("book-container") && !text.includes("book-list-container")) {

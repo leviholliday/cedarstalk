@@ -8,6 +8,7 @@
  */
 
 import { serve } from "bun";
+import { version } from "../package.json";
 import { config } from "./config";
 import dashboard from "./dashboard.html";
 import { record, trim } from "./lib/analytics";
@@ -15,7 +16,6 @@ import { errorResponse, json, unauthorized } from "./lib/http";
 import { openapi } from "./lib/openapi";
 import { routes } from "./routes";
 import type { RouteDef, RouteRequest } from "./routes/types";
-import { version } from "../package.json";
 
 const token = config.bearerToken;
 

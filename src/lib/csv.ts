@@ -33,10 +33,10 @@ export function parseCSV(text: string): string[][] {
   return rows;
 }
 
-const escape = (cell: unknown) => {
+const quote = (cell: unknown) => {
   const text = String(cell ?? "");
   return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 };
 
 export const toCSV = (rows: unknown[][]): string =>
-  rows.map((row) => row.map(escape).join(",")).join("\n");
+  rows.map((row) => row.map(quote).join(",")).join("\n");

@@ -17,9 +17,27 @@ export interface Query {
 
 const ALPHABET = "abcdefghijklmnopqrstuvwxyz".split("");
 
+/**
+ * The result cap, recognised by the plateau it makes.
+ *
+ * A server that truncates every answer at N produces ties at exactly N, over
+ * and over, from queries with nothing else in common. A single largest result
+ * is just the largest result — splitting behind it costs twenty-six requests
+ * and finds nothing. So a cap is only believed once two queries have hit the
+ * same ceiling.
+ */
+export function capOf(counts: Iterable<number>): number {
+  const seen = new Map<number, number>();
+  for (const count of counts) seen.set(count, (seen.get(count) ?? 0) + 1);
+  let cap = 0;
+  for (const [count, times] of seen) if (times >= 2 && count > cap) cap = count;
+  return cap;
+}
+
 export interface PlanState {
   cap: number;
-  done: number;
+  /** Queries already answered. */
+  asked: number;
   pending: number;
   stuck: number;
 }
@@ -43,7 +61,7 @@ export function planDirectory(limit = 100, maxDepth = 4): Plan {
     .all();
 
   const done = new Map(rows.map((row) => [`${row.last}|${row.first}`, row.count]));
-  const cap = rows.reduce((most, row) => Math.max(most, row.count), 0);
+  const cap = capOf(rows.map((row) => row.count));
 
   const queries: Query[] = [];
   const seen = new Set<string>();
@@ -70,7 +88,13 @@ export function planDirectory(limit = 100, maxDepth = 4): Plan {
     else for (const letter of ALPHABET) push(last, first + letter);
   }
 
-  return { cap, done: done.size, pending: queries.length, stuck, queries: queries.slice(0, limit) };
+  return {
+    cap,
+    asked: done.size,
+    pending: queries.length,
+    stuck,
+    queries: queries.slice(0, limit),
+  };
 }
 
 /** Students with no booklist on file for a term. The harvester's to-do list. */

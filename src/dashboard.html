@@ -94,6 +94,14 @@
       .err { color: var(--pink); }
       a { color: var(--blue); }
       footer { color: var(--dim); margin-top: 3rem; font-size: 11px; }
+      button.link {
+        background: none;
+        border: 0;
+        color: var(--blue);
+        font: inherit;
+        padding: 0;
+        cursor: pointer;
+      }
     </style>
   </head>
   <body>
@@ -106,7 +114,7 @@
       <footer>
         <span id="foot"></span> ·
         <a href="/openapi.json">openapi.json</a> ·
-        <a href="#" id="forget">forget token</a>
+        <button type="button" id="forget" class="link">forget token</button>
       </footer>
     </main>
 

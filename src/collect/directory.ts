@@ -20,6 +20,7 @@ import { db } from "../db";
 import { finishSweep, startSweep } from "../store/history";
 import { retireUnseen, upsertPeople } from "../store/people";
 import { AuthExpiredError, search, sessionCookie, sleep } from "./directory-api";
+import { capOf } from "./plan";
 
 export interface SweepOptions {
   concurrency?: number;
@@ -91,12 +92,10 @@ export async function sweepDirectory(options: SweepOptions = {}): Promise<SweepR
     done.set(key(row.last, row.first), row.count);
   }
 
-  // Largest result set the server has ever handed back, recovered from the db
-  // so a resumed run knows the cap before making a single request.
-  let cap =
-    database
-      .query<{ n: number }, []>("SELECT COALESCE(MAX(count), 0) AS n FROM sweep_queries")
-      .get()?.n ?? 0;
+  // The result cap, recovered from the db so a resumed run knows it before
+  // making a single request. Recognised by ties rather than by the maximum —
+  // see capOf.
+  let cap = capOf(done.values());
 
   const split = new Set<string>();
   const queue: { last: string; first: string }[] = [];
@@ -145,8 +144,6 @@ export async function sweepDirectory(options: SweepOptions = {}): Promise<SweepR
     state.changed += tally.changed;
     state.seen += tally.seen - tally.added;
     done.set(key(last, first), people.length);
-    if (people.length > cap) cap = people.length;
-    state.cap = cap;
   };
 
   const cookie = await sessionCookie({ cookieFile });
@@ -188,6 +185,8 @@ export async function sweepDirectory(options: SweepOptions = {}): Promise<SweepR
     if (expired) break;
     const before = queue.length;
     state.stuck = 0;
+    cap = capOf(done.values());
+    state.cap = cap;
     for (const [entry, count] of done) {
       if (!cap || count < cap) continue;
       const [last = "", first = ""] = entry.split(SEP);

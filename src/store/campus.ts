@@ -105,9 +105,7 @@ export function campusMap(): CampusMap | null {
 
 export const buildings = (kind?: string): Building[] =>
   kind
-    ? db()
-        .query<Building, [string]>(`${BUILDING_SELECT} WHERE kind = ? ORDER BY label`)
-        .all(kind)
+    ? db().query<Building, [string]>(`${BUILDING_SELECT} WHERE kind = ? ORDER BY label`).all(kind)
     : db().query<Building, []>(`${BUILDING_SELECT} ORDER BY label`).all();
 
 export const buildingByLabel = (label: string): Building | null =>
@@ -152,7 +150,14 @@ export function occupancy(by: "class" | "type" | "department" = "class"): Occupa
   const column = { class: "student_class", type: "student_type", department: "department" }[by];
   const rows = db()
     .query<
-      { label: string; kind: string | null; lat: number | null; lon: number | null; bucket: string; n: number },
+      {
+        label: string;
+        kind: string | null;
+        lat: number | null;
+        lon: number | null;
+        bucket: string;
+        n: number;
+      },
       []
     >(
       `SELECT b.label, b.kind, b.lat, b.lon,

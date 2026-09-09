@@ -2,9 +2,9 @@
 
 import { analytics } from "../lib/analytics";
 import { json, num } from "../lib/http";
-import { harvestTerms, metricHistory } from "../store/harvest";
-import { termStats } from "../store/catalog";
 import { buildings } from "../store/campus";
+import { termStats } from "../store/catalog";
+import { harvestTerms, metricHistory } from "../store/harvest";
 import { populationOverTime, recentSweeps } from "../store/history";
 import { peopleStats } from "../store/people";
 import { latestYear, programYears } from "../store/programs";

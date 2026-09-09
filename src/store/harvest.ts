@@ -27,8 +27,12 @@ export function codesFromBooks(books: Book[] | undefined): string[] {
   const codes = new Set<string>();
   if (!Array.isArray(books)) return [];
   for (const book of books) {
-    const subject = String(book.department ?? "").split("-")[0]?.trim();
-    const number = String(book.course ?? "").split("-")[0]?.trim();
+    const subject = String(book.department ?? "")
+      .split("-")[0]
+      ?.trim();
+    const number = String(book.course ?? "")
+      .split("-")[0]
+      ?.trim();
     if (!subject || !number) continue;
     codes.add(`${subject}-${number}`.toUpperCase());
   }

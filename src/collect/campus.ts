@@ -14,10 +14,10 @@
  */
 
 import { db } from "../db";
-import { finishSweep, startSweep } from "../store/history";
 import { type CampusMap, replaceCampus } from "../store/campus";
+import { finishSweep, startSweep } from "../store/history";
 import buildingsTsv from "./assets/buildings.tsv" with { type: "text" };
-import tourJson from "./assets/tour-buildings.json" with { type: "text" };
+import tourJson from "./assets/tour-buildings.json";
 import { fetchTour, tourKey } from "./tour";
 
 /** South, west, north, east. Cedarville University and a little air around it. */
@@ -96,7 +96,7 @@ export function labelMap(): { label: string; osm: string | null }[] {
 }
 
 export const tourBuildings = (): Record<string, { ring: [number, number][] }> =>
-  (JSON.parse(tourJson) as { buildings: Record<string, { ring: [number, number][] }> }).buildings;
+  tourJson.buildings as unknown as Record<string, { ring: [number, number][] }>;
 
 /** Names the engine actually needs coordinates for, taken from its own data. */
 export function occupiedBuildings(): { label: string; kind: string }[] {

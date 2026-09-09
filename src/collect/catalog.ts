@@ -88,18 +88,13 @@ export async function crawlCourses(
   client = new GuestColleague(),
 ): Promise<any[]> {
   const byId = new Map<string, any>();
-  await pages(
-    client,
-    { terms: [term], searchResultsView: "CatalogListing" },
-    options,
-    (result) => {
-      for (const raw of result.CourseFullModels ?? []) {
-        const course = raw as { Id?: string };
-        if (course?.Id) byId.set(course.Id, course);
-      }
-      return byId.size;
-    },
-  );
+  await pages(client, { terms: [term], searchResultsView: "CatalogListing" }, options, (result) => {
+    for (const raw of result.CourseFullModels ?? []) {
+      const course = raw as { Id?: string };
+      if (course?.Id) byId.set(course.Id, course);
+    }
+    return byId.size;
+  });
   return [...byId.values()];
 }
 

@@ -13,12 +13,12 @@
 import { Database } from "bun:sqlite";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
-import type { ProgramPage } from "./book";
+import { replaceTerm, writeRule } from "../store/catalog";
 import { ingestHarvest } from "../store/harvest";
 import { finishSweep, startSweep } from "../store/history";
 import { upsertPeople } from "../store/people";
-import { replaceTerm, writeRule } from "../store/catalog";
 import { replaceYear } from "../store/programs";
+import type { ProgramPage } from "./book";
 
 const open = (path: string) => new Database(path, { readonly: true });
 
