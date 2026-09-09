@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>cedarengine</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --ink: #ece7df;
+        --dim: #8b8378;
+        --bg: #14120f;
+        --panel: #1c1916;
+        --line: #2b2621;
+        --pink: #ff87d7;
+        --blue: #5fafff;
+        --amber: #d7af5f;
+      }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body {
+        background: var(--bg);
+        color: var(--ink);
+        font: 13px/1.6 "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+        padding: 2rem 1.5rem 4rem;
+      }
+      main { max-width: 1080px; margin: 0 auto; }
+      h1 {
+        font-family: "Instrument Serif", Georgia, serif;
+        font-size: 2.75rem;
+        font-weight: 400;
+        letter-spacing: -0.01em;
+      }
+      h1 em { color: var(--pink); font-style: italic; }
+      header p { color: var(--dim); margin-top: 0.25rem; }
+      h2 {
+        font-family: "Instrument Serif", Georgia, serif;
+        font-size: 1.4rem;
+        font-weight: 400;
+        margin: 2.5rem 0 0.75rem;
+      }
+      section { border-top: 1px solid var(--line); padding-top: 0.25rem; }
+      .tiles {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        gap: 1px;
+        background: var(--line);
+        border: 1px solid var(--line);
+        margin-top: 1.5rem;
+      }
+      .tile { background: var(--panel); padding: 0.9rem 1rem; }
+      .tile b { display: block; font-size: 1.7rem; font-weight: 500; letter-spacing: -0.02em; }
+      .tile span { color: var(--dim); font-size: 11px; text-transform: lowercase; }
+      table { width: 100%; border-collapse: collapse; margin-top: 0.5rem; }
+      th {
+        text-align: left;
+        color: var(--dim);
+        font-weight: 400;
+        font-size: 11px;
+        padding: 0.35rem 0.6rem 0.35rem 0;
+        border-bottom: 1px solid var(--line);
+      }
+      td { padding: 0.3rem 0.6rem 0.3rem 0; border-bottom: 1px solid var(--line); }
+      td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
+      .bar { display: inline-block; height: 9px; background: var(--pink); vertical-align: middle; }
+      .bar.blue { background: var(--blue); }
+      .bar.amber { background: var(--amber); }
+      .wrap { overflow-x: auto; }
+      .gate { max-width: 460px; margin: 4rem auto; }
+      input {
+        width: 100%;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        color: var(--ink);
+        font: inherit;
+        padding: 0.6rem 0.7rem;
+        margin: 0.75rem 0;
+      }
+      button {
+        background: var(--pink);
+        color: #14120f;
+        border: 0;
+        font: inherit;
+        font-weight: 700;
+        padding: 0.5rem 1.1rem;
+        cursor: pointer;
+      }
+      button.ghost { background: transparent; color: var(--dim); border: 1px solid var(--line); }
+      .row { display: flex; gap: 0.5rem; align-items: center; }
+      .err { color: var(--pink); }
+      a { color: var(--blue); }
+      footer { color: var(--dim); margin-top: 3rem; font-size: 11px; }
+    </style>
+  </head>
+  <body>
+    <main id="app">
+      <header>
+        <h1>cedar<em>engine</em></h1>
+        <p>the directory, the catalog, the book, the booklists and the campus, in one place</p>
+      </header>
+      <div id="body"></div>
+      <footer>
+        <span id="foot"></span> ·
+        <a href="/openapi.json">openapi.json</a> ·
+        <a href="#" id="forget">forget token</a>
+      </footer>
+    </main>
+
+    <script type="module">
+      const KEY = "cedarengine.token";
+      const el = document.getElementById("body");
+      const foot = document.getElementById("foot");
+      const n = (v) => (v ?? 0).toLocaleString("en-US");
+      const pct = (v) => `${Math.round((v ?? 0) * 100)}%`;
+
+      const api = async (path) => {
+        const res = await fetch(path, {
+          headers: { authorization: `Bearer ${localStorage.getItem(KEY) ?? ""}` },
+        });
+        if (res.status === 401) throw new Error("unauthorised");
+        if (!res.ok) throw new Error(`${path} returned ${res.status}`);
+        return res.json();
+      };
+
+      function gate(message = "") {
+        el.innerHTML = `<div class="gate">
+          <p>This engine holds real people's rooms and phone numbers. Paste the bearer token from your <code>.env</code>.</p>
+          <input id="token" type="password" placeholder="BEARER_TOKEN" autofocus />
+          <div class="row"><button id="go">Unlock</button><span class="err">${message}</span></div>
+        </div>`;
+        const submit = () => {
+          localStorage.setItem(KEY, document.getElementById("token").value.trim());
+          load();
+        };
+        document.getElementById("go").onclick = submit;
+        document.getElementById("token").onkeydown = (e) => e.key === "Enter" && submit();
+      }
+
+      const tile = (label, value) => `<div class="tile"><b>${value}</b><span>${label}</span></div>`;
+
+      const bars = (rows, key, klass = "") => {
+        const max = Math.max(1, ...rows.map((r) => r[key]));
+        return rows
+          .map(
+            (r) => `<tr><td>${r.label}</td><td class="n">${n(r[key])}</td>
+              <td style="width:55%"><i class="bar ${klass}" style="width:${(r[key] / max) * 100}%"></i></td></tr>`,
+          )
+          .join("");
+      };
+
+      async function load() {
+        try {
+          const [stats, traffic] = await Promise.all([api("/v1/stats"), api("/v1/analytics")]);
+          render(stats, traffic);
+        } catch (error) {
+          if (error.message === "unauthorised") gate("that token was not it");
+          else el.innerHTML = `<p class="err">${error.message}</p>`;
+        }
+      }
+
+      function render(stats, traffic) {
+        const sections = stats.catalog.terms.reduce((sum, t) => sum + t.sections, 0);
+        const courses = stats.catalog.terms.reduce((sum, t) => sum + t.courses, 0);
+        const students = stats.booklists.reduce((sum, t) => sum + t.students, 0);
+        const latest = stats.metrics.at(-1);
+
+        el.innerHTML = `
+          <div class="tiles">
+            ${tile("people", n(stats.people.people))}
+            ${tile("students", n(stats.people.students))}
+            ${tile("departed", n(stats.people.gone))}
+            ${tile("sections", n(sections))}
+            ${tile("courses", n(courses))}
+            ${tile("programs", n(stats.catalog.programs[0]?.programs ?? 0))}
+            ${tile("booklists", n(students))}
+            ${tile("buildings", n(stats.campus.buildings))}
+          </div>
+
+          <section><h2>dorms</h2><div class="wrap"><table>
+            <tr><th>building</th><th class="n">people</th><th></th></tr>
+            ${bars(stats.people.byDorm.slice(0, 18).map((d) => ({ label: d.key, n: d.n })), "n")}
+          </table></div></section>
+
+          <section><h2>classes</h2><div class="wrap"><table>
+            <tr><th>class</th><th class="n">people</th><th></th></tr>
+            ${bars(stats.people.byClass.map((c) => ({ label: c.key, n: c.n })), "n", "blue")}
+          </table></div></section>
+
+          <section><h2>the major model</h2>
+            ${
+              latest
+                ? `<p>${pct(latest.exact)} exact · ${pct(latest.top3)} top-3 · ${pct(latest.cluster)} cluster
+                   <span style="color:var(--dim)"> over ${n(latest.scored)} labelled students, terms ${latest.terms}</span></p>`
+                : `<p style="color:var(--dim)">no evaluation yet — load a labels CSV and run <code>engine evaluate</code></p>`
+            }
+            <div class="wrap"><table>
+              <tr><th>term</th><th class="n">booklists</th><th>collected</th></tr>
+              ${stats.booklists
+                .map(
+                  (t) =>
+                    `<tr><td>${t.term}</td><td class="n">${n(t.students)}</td><td>${t.fetchedAt.slice(0, 10)}</td></tr>`,
+                )
+                .join("")}
+            </table></div>
+          </section>
+
+          <section><h2>population over time</h2><div class="wrap"><table>
+            <tr><th>month</th><th class="n">arrived</th><th class="n">left</th></tr>
+            ${stats.population
+              .map(
+                (m) =>
+                  `<tr><td>${m.month}</td><td class="n">${n(m.appeared)}</td><td class="n">${n(m.vanished)}</td></tr>`,
+              )
+              .join("")}
+          </table></div></section>
+
+          <section><h2>sweeps</h2><div class="wrap"><table>
+            <tr><th>when</th><th>what</th><th>by</th><th class="n">seen</th><th class="n">new</th>
+              <th class="n">changed</th><th class="n">left</th><th>complete</th></tr>
+            ${stats.sweeps
+              .map(
+                (s) => `<tr><td>${s.startedAt.slice(0, 16).replace("T", " ")}</td><td>${s.kind}</td>
+                  <td>${s.source}</td><td class="n">${n(s.seen)}</td><td class="n">${n(s.added)}</td>
+                  <td class="n">${n(s.changed)}</td><td class="n">${n(s.vanished)}</td>
+                  <td>${s.complete ? "yes" : s.finishedAt ? "partial" : "running"}</td></tr>`,
+              )
+              .join("")}
+          </table></div></section>
+
+          <section><h2>traffic</h2><div class="wrap"><table>
+            <tr><th>endpoint</th><th class="n">requests</th><th class="n">avg ms</th><th></th></tr>
+            ${bars(
+              traffic.byEndpoint.map((e) => ({ label: e.endpoint, n: e.n, ms: e.ms })),
+              "n",
+              "amber",
+            )}
+          </table></div></section>`;
+
+        foot.textContent = `${n(traffic.total)} requests in 24h · p50 ${traffic.p50}ms · p95 ${traffic.p95}ms · ${traffic.errors} errors`;
+      }
+
+      document.getElementById("forget").onclick = (e) => {
+        e.preventDefault();
+        localStorage.removeItem(KEY);
+        gate("");
+      };
+
+      if (localStorage.getItem(KEY)) load();
+      else gate("");
+    </script>
+  </body>
+</html>

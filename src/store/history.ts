@@ -51,23 +51,30 @@ export interface SweepTally {
   note?: string;
 }
 
-export function finishSweep(id: number, tally: SweepTally = {}): void {
+/**
+ * Add to a sweep's running totals.
+ *
+ * Counters accumulate rather than being set, because a sweep driven by the
+ * extension arrives one batch at a time and each batch only knows about
+ * itself.
+ */
+export function bumpSweep(id: number, tally: SweepTally): void {
   db()
     .query(
-      `UPDATE sweeps SET finished_at = ?, complete = ?, seen = ?, added = ?, changed = ?,
-         vanished = ?, note = COALESCE(?, note)
+      `UPDATE sweeps SET seen = seen + ?, added = added + ?, changed = changed + ?,
+         vanished = vanished + ?
        WHERE id = ?`,
     )
-    .run(
-      new Date().toISOString(),
-      tally.complete ? 1 : 0,
-      tally.seen ?? 0,
-      tally.added ?? 0,
-      tally.changed ?? 0,
-      tally.vanished ?? 0,
-      tally.note ?? null,
-      id,
-    );
+    .run(tally.seen ?? 0, tally.added ?? 0, tally.changed ?? 0, tally.vanished ?? 0, id);
+}
+
+export function finishSweep(id: number, tally: SweepTally = {}): void {
+  bumpSweep(id, tally);
+  db()
+    .query(
+      "UPDATE sweeps SET finished_at = ?, complete = ?, note = COALESCE(?, note) WHERE id = ?",
+    )
+    .run(new Date().toISOString(), tally.complete ? 1 : 0, tally.note ?? null, id);
 }
 
 export const recentSweeps = (limit = 20): Sweep[] =>
