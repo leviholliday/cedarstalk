@@ -1,0 +1,125 @@
+// ==UserScript==
+// @name         Cedar Booklist Harvester (__TERM__)
+// @namespace    dunkirk.sh/cedarengine
+// @version      2.0
+// @description  Manual-start sweep of the campus store per-student booklists into IndexedDB for term __TERM__. Start/Stop/Restart/Download panel; auto-solves the AWS WAF by reloading; resumes across reloads.
+// @match        https://store.cedarville.edu/textbook/index/search*
+// @run-at       document-idle
+// @grant        none
+// ==/UserScript==
+(function () {
+  'use strict';
+  const IDS = __IDS__;
+  const TERM = "__TERM__";
+  const CONC = 3, DELAY = 120, REFRESH_EVERY = 70;
+  const DB = 'cedar_' + TERM, STORE = 'students';
+  const KEY_ACTIVE = 'cedar_active_' + TERM;   // "1" while a sweep is running (survives reload)
+  const KEY_NOPROG = 'cedar_noprog_' + TERM;
+  const KEY_LAST = 'cedar_last_' + TERM;
+
+  const idb = {
+    db: null,
+    open() { return new Promise((res, rej) => { const r = indexedDB.open(DB, 1); r.onupgradeneeded = () => r.result.createObjectStore(STORE, { keyPath: 'id' }); r.onsuccess = () => { idb.db = r.result; res(); }; r.onerror = () => rej(r.error); }); },
+    keys() { return new Promise((res, rej) => { const t = idb.db.transaction(STORE).objectStore(STORE).getAllKeys(); t.onsuccess = () => res(t.result.map(String)); t.onerror = () => rej(t.error); }); },
+    all() { return new Promise((res, rej) => { const t = idb.db.transaction(STORE).objectStore(STORE).getAll(); t.onsuccess = () => res(t.result); t.onerror = () => rej(t.error); }); },
+    put(rec) { return new Promise((res, rej) => { const t = idb.db.transaction(STORE, 'readwrite').objectStore(STORE).put(rec); t.onsuccess = () => res(); t.onerror = () => rej(t.error); }); },
+    clear() { return new Promise((res, rej) => { const t = idb.db.transaction(STORE, 'readwrite').objectStore(STORE).clear(); t.onsuccess = () => res(); t.onerror = () => rej(t.error); }); },
+  };
+
+  const grab = (b, l) => { const m = b.match(new RegExp(l + ':\\s*([^<]*?)\\s*</span>', 'i')); return m ? m[1].trim() : null; };
+  function parse(html) {
+    const books = [];
+    for (const block of html.split('book-container').slice(1)) {
+      const titleM = block.match(/book-title">\s*([^<]*?)\s*<\/div>/i);
+      const prices = [];
+      for (const row of block.split('class="book-price"').slice(1)) {
+        const cond = row.match(/sale_condition"\s*\n?\s*value="([^"]+)"/i);
+        const amt = row.match(/book-price-right">\s*\$?\s*([\d,.]+)/i);
+        if (cond || amt) prices.push({ condition: cond ? cond[1] : null, price: amt ? amt[1] : null });
+      }
+      books.push({ title: titleM ? titleM[1].trim() : null, department: grab(block, 'Department'), course: grab(block, 'Course'), section: grab(block, 'Section'), isbn: grab(block, 'ISBN-13'), edition: grab(block, 'Edition'), status: grab(block, 'Status'), prices });
+    }
+    return books;
+  }
+  const refreshToken = async () => { try { const I = window.AwsWafIntegration; if (I && typeof I.getToken === 'function') { await I.getToken(); return true; } if (I && typeof I.forceRefreshToken === 'function') { await I.forceRefreshToken(); return true; } } catch (e) {} return false; };
+
+  // ── control panel ──
+  const panel = document.createElement('div');
+  panel.style.cssText = 'position:fixed;z-index:99999;right:12px;bottom:12px;background:#111;color:#eee;font:12px/1.5 ui-monospace,monospace;padding:12px 14px;border-radius:10px;box-shadow:0 6px 22px rgba(0,0,0,.45);min-width:250px';
+  document.body.appendChild(panel);
+  let running = false, i = 0, remaining = [], ok = 0, fail = 0, consec = 0, sinceRefresh = 0, t0 = 0, ticker = null;
+
+  async function render() {
+    const scanned = idb.db ? (await idb.keys()).length : 0;
+    const rate = running ? ((ok + fail) / ((Date.now() - t0) / 1000 || 1)).toFixed(1) + '/s' : '';
+    panel.innerHTML =
+      '<div style="font-weight:700;margin-bottom:6px">Cedar Harvester · ' + TERM + '</div>' +
+      '<div style="color:#9ca3af">' + scanned + ' / ' + IDS.length + ' scanned' + (running ? '  ·  ' + ok + ' ok ' + fail + ' fail  ' + rate : '') + '</div>' +
+      '<div style="margin-top:9px;display:flex;gap:6px;flex-wrap:wrap">' +
+      btn('start', running ? 'Running…' : (scanned ? 'Resume' : 'Start'), running) +
+      btn('stop', 'Stop', !running) +
+      btn('restart', 'Restart', false) +
+      btn('dl', 'Download', false) +
+      '</div>';
+    wire();
+  }
+  const btn = (id, label, disabled) => '<button id="cb_' + id + '"' + (disabled ? ' disabled' : '') + ' style="cursor:pointer;border:1px solid #333;background:#1c1f27;color:#e5e7eb;border-radius:6px;padding:4px 9px;font:11px ui-monospace,monospace' + (disabled ? ';opacity:.45;cursor:default' : '') + '">' + label + '</button>';
+  function wire() {
+    const on = (id, fn) => { const b = document.getElementById('cb_' + id); if (b && !b.disabled) b.onclick = fn; };
+    on('start', start); on('stop', stop); on('restart', restart); on('dl', download);
+  }
+
+  async function start() {
+    if (running) return;
+    sessionStorage.setItem(KEY_ACTIVE, '1');
+    running = true; t0 = Date.now(); ok = 0; fail = 0; consec = 0; sinceRefresh = 0;
+    const scanned = new Set(await idb.keys());
+    remaining = IDS.filter((id) => !scanned.has(String(id))); i = 0;
+    // reload-loop guard
+    const last = Number(sessionStorage.getItem(KEY_LAST) || '-1');
+    const noprog = Number(sessionStorage.getItem(KEY_NOPROG) || '0');
+    if (scanned.size === last) { if (noprog >= 4) { note('stalled — WAF not clearing. Stopped.'); return stop(); } sessionStorage.setItem(KEY_NOPROG, String(noprog + 1)); }
+    else sessionStorage.setItem(KEY_NOPROG, '0');
+    sessionStorage.setItem(KEY_LAST, String(scanned.size));
+    if (!remaining.length) { note('complete — nothing left to scan.'); return finish(); }
+    await refreshToken();
+    ticker = setInterval(render, 900); render();
+    await Promise.all(Array.from({ length: CONC }, worker));
+  }
+  function stop() { running = false; sessionStorage.removeItem(KEY_ACTIVE); if (ticker) clearInterval(ticker); render(); }
+  async function restart() {
+    if (!confirm('Restart ' + TERM + ' from scratch? This clears all harvested data for this term.')) return;
+    stop(); await idb.clear(); sessionStorage.removeItem(KEY_NOPROG); sessionStorage.removeItem(KEY_LAST); render(); start();
+  }
+  let reloading = false;
+  function doReload() { if (reloading) return; reloading = true; if (ticker) clearInterval(ticker); note('token dead — reloading to re-solve WAF…'); setTimeout(() => location.reload(), 600); }
+  function note(msg) { panel.insertAdjacentHTML('beforeend', '<div style="margin-top:6px;color:#e0a34a">' + msg + '</div>'); }
+
+  async function worker() {
+    while (i < remaining.length && running && !reloading) {
+      if (sinceRefresh >= REFRESH_EVERY) { sinceRefresh = 0; await refreshToken(); }
+      const id = remaining[i++];
+      try {
+        const r = await fetch('/textbook/index/books?student_id=' + id + '&_=' + Date.now(), { headers: { 'x-requested-with': 'XMLHttpRequest' } });
+        const t = await r.text();
+        if (!t.includes('book-container') && !t.includes('book-list-container')) throw new Error('waf' + r.status);
+        await idb.put({ id: String(id), books: parse(t), at: Date.now() });
+        ok++; consec = 0; sinceRefresh++;
+      } catch (e) { fail++; consec++; if (consec >= 5) { const got = await refreshToken(); consec = 0; if (!got) return doReload(); i--; } }
+      if (DELAY) await new Promise((z) => setTimeout(z, DELAY));
+    }
+    if (running && !reloading && i >= remaining.length) finish();
+  }
+  async function finish() { stop(); const all = await idb.all(); note('done — ' + all.length + ' students. downloading ' + TERM + '.json'); download(all); }
+  async function download(all) {
+    if (!Array.isArray(all)) all = await idb.all();
+    const blob = new Blob([JSON.stringify(all.map((r) => ({ id: r.id, books: r.books })))], { type: 'application/json' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = TERM + '.json'; a.click();
+  }
+
+  (async () => {
+    await idb.open();
+    await render();
+    if (sessionStorage.getItem(KEY_ACTIVE) === '1') start(); // resume after a WAF reload
+  })();
+})();

@@ -1,0 +1,34 @@
+# Names as the catalog and directory write them, mapped to the name the same
+# building carries in OpenStreetMap. Leave osm blank for a building OSM has
+# never heard of; `bun scripts/pin-buildings.mjs` finds those in Cedarville's
+# own campus tour and writes their outlines to data/tour-buildings.json.
+label	osm
+Engineering and Science Ctr	Engineering and Science Center
+Ctr for Bib and Theo Studies	Center for Biblical and Theological Studies
+Scharnberg Bus and Comm Center	Scharnberg Business and Communication Center
+Tyler Digital Comm Center	Tyler Digital Communications Center
+Health Sciences Center	Health Sciences Center
+Apple Technology Resource Ctr	Apple Technology Resource Center
+Callan Athletic Center	Callan Athletic Center
+Milner	Milner Business Administration Building
+Chemistry Lab Center	Chemistry Laboratory Center
+Dixon Ministry Center	Dixon Ministry Center
+Civil Engineering Center	Civil Engineering Center
+Centennial Library	Centennial Library
+History and Government Center	History and Government Center
+Faith Hall	Faith Hall
+Lawlor Hall	Lawlor Hall
+Maddox Hall	Maddox Hall
+Marshall Hall	Marshall Hall
+McChesney Hall	McChesney Hall
+McKinney Hall	McKinney Hall
+Morton Hall	Morton Hall
+Printy Hall	Printy Hall
+Willetts Hall	Willetts Hall
+# OSM has no polygon for these six. Their outlines come from the campus tour.
+Brock Hall
+Johnson Hall
+Murdoch Hall
+Murphy Hall
+Rickard Hall
+St Clair Hall
