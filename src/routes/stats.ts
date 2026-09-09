@@ -11,7 +11,7 @@ import { latestYear, programYears } from "../store/programs";
 import type { RouteDef } from "./types";
 
 /** One call, because the dashboard wants all of it and a dozen round trips is silly. */
-export const engineStats = () => ({
+const engineStats = () => ({
   people: peopleStats(),
   catalog: { terms: termStats(), year: latestYear(), programs: programYears() },
   booklists: harvestTerms(),

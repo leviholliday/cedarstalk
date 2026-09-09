@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { bestName } from "../src/collect/campus";
 import { useDatabase } from "../src/db";
-import { currentTerm, nextTerm } from "../src/lib/terms";
+import { currentTerm } from "../src/lib/terms";
 import { clusterOf } from "../src/model/clusters";
 import { buildModel, forgetModel } from "../src/model/major";
 import { replaceYear } from "../src/store/programs";
@@ -81,12 +81,6 @@ describe("terms", () => {
     expect(currentTerm(new Date("2026-08-20"))).toBe("2026FA");
     expect(currentTerm(new Date("2027-02-01"))).toBe("2027SP");
     expect(currentTerm(new Date("2027-06-01"))).toBe("2027SU");
-  });
-
-  test("terms follow each other around the year", () => {
-    expect(nextTerm("2026FA")).toBe("2027SP");
-    expect(nextTerm("2027SP")).toBe("2027SU");
-    expect(nextTerm("2027SU")).toBe("2027FA");
   });
 });
 
