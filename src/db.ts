@@ -199,6 +199,23 @@ CREATE TABLE IF NOT EXISTS booklist_events (
 CREATE INDEX IF NOT EXISTS booklist_events_student ON booklist_events (student_id, seq);
 CREATE INDEX IF NOT EXISTS booklist_events_term ON booklist_events (term, at);
 
+-- The registrar's own taxonomy: every program, the department that teaches it,
+-- and the school it belongs to.
+--
+-- Worth having for its own sake, and worth more than that to the model: eleven
+-- schools is a better bucket than eight regexes I wrote by hand, and it is the
+-- university's own answer to "how close was that guess" rather than mine.
+CREATE TABLE IF NOT EXISTS majors (
+  program    TEXT NOT NULL,
+  level      TEXT NOT NULL,   -- major | minor | concentration | ...
+  department TEXT,
+  school     TEXT,
+  fetched_at TEXT NOT NULL,
+  PRIMARY KEY (program, level)
+) STRICT;
+
+CREATE INDEX IF NOT EXISTS majors_school ON majors (school);
+
 -- Known majors, for scoring the model against reality.
 CREATE TABLE IF NOT EXISTS labels (
   student_id TEXT PRIMARY KEY,
@@ -241,6 +258,7 @@ CREATE TABLE IF NOT EXISTS buildings (
   x          REAL,               -- metres east of the map origin
   y          REAL,               -- metres south of it
   node       INTEGER,            -- nearest walking-graph node, i.e. the door
+  gender     TEXT,               -- male | female | mixed, for the halls
   ring       TEXT,               -- outline, in map metres
   source     TEXT NOT NULL,      -- osm | tour
   fetched_at TEXT NOT NULL

@@ -17,6 +17,7 @@ import { db } from "../db";
 import { type CampusMap, replaceCampus } from "../store/campus";
 import { finishSweep, startSweep } from "../store/history";
 import buildingsTsv from "./assets/buildings.tsv" with { type: "text" };
+import dormGenderTsv from "./assets/dorm-gender.tsv" with { type: "text" };
 import pinsTsv from "./assets/pins.tsv" with { type: "text" };
 import tourJson from "./assets/tour-buildings.json";
 import { fetchTour, tourKey } from "./tour";
@@ -99,6 +100,25 @@ export function labelMap(): { label: string; osm: string | null }[] {
     const [label, osm] = trimmed.split("\t");
     if (!label || label === "label") continue;
     rows.push({ label, osm: osm?.trim() || null });
+  }
+  return rows;
+}
+
+/**
+ * Which halls are men's and which are women's.
+ *
+ * The directory does not carry gender and never will, but it does say who
+ * lives where, and the halls are single-sex. Carried over from cedarstalk,
+ * where it was worked out once from exactly that.
+ */
+export function dormGender(): Map<string, string> {
+  const rows = new Map<string, string>();
+  for (const line of dormGenderTsv.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const [dorm, gender] = trimmed.split("\t");
+    if (!dorm || !gender || dorm === "Dorm") continue;
+    rows.set(dorm, gender);
   }
   return rows;
 }
@@ -213,7 +233,7 @@ export function bestName(label: string, candidates: Iterable<string>): string | 
  */
 export function buildMap(
   osm: { elements: OsmElement[] },
-  labels: { label: string; osm: string | null; kind?: string }[],
+  labels: { label: string; osm: string | null; kind?: string; gender?: string | null }[],
   extra: Record<string, { ring: [number, number][] }> = {},
   pinned: Record<string, Pin> = {},
 ): CampusMap {
@@ -316,7 +336,7 @@ export function buildMap(
   const missing: string[] = [];
   const focus = new Set<string>();
 
-  for (const { label, osm: name, kind } of labels) {
+  for (const { label, osm: name, kind, gender } of labels) {
     let ring: [number, number][] | null = null;
     let source: "osm" | "tour" | "pin" = "osm";
     const matched = name && byName.has(name) ? name : bestName(label, byName.keys());
@@ -362,6 +382,7 @@ export function buildMap(
       node: best,
       name: matched ?? name ?? label,
       kind: kind ?? "unknown",
+      gender: gender ?? null,
       source,
       centre,
       ...unproject(centre),
@@ -452,10 +473,12 @@ export async function collectCampus(): Promise<{
 
   // Everything the curated map knows about, plus every building the directory
   // actually puts somebody in.
+  const genders = dormGender();
   const labels = [...new Set([...curated.keys(), ...kinds.keys()])].map((label) => ({
     label,
     osm: curated.get(label) ?? label,
     kind: kinds.get(label) ?? "unknown",
+    gender: genders.get(label) ?? null,
   }));
 
   // The tour draws the dorms OSM never traced. Its outlines are the fallback,

@@ -6,6 +6,7 @@ import { guessAll } from "../model/guess";
 import { model } from "../model/major";
 import { harvestTerms, metricHistory } from "../store/harvest";
 import { termChurn } from "../store/history";
+import { allMajors, schools } from "../store/majors";
 import type { RouteDef } from "./types";
 
 export const majorRoutes: RouteDef[] = [
@@ -44,6 +45,14 @@ export const majorRoutes: RouteDef[] = [
         metrics: metricHistory(),
       });
     },
+  },
+  {
+    method: "GET",
+    path: "/v1/majors/schools",
+    tag: "majors",
+    summary: "The registrar's taxonomy: every program, its department and its school",
+    query: [{ name: "level", description: "major, minor, or leave off for all" }],
+    handler: (_request, url) => json({ schools: schools(), programs: allMajors(q(url, "level")) }),
   },
   {
     method: "POST",

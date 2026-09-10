@@ -13,6 +13,7 @@ export interface Anchor {
   node: number;
   name: string;
   kind: string;
+  gender: string | null;
   source: "osm" | "tour" | "pin";
   centre: [number, number];
   lat: number;
@@ -34,6 +35,7 @@ export interface Building {
   label: string;
   osmName: string | null;
   kind: string | null;
+  gender: string | null;
   lat: number | null;
   lon: number | null;
   x: number | null;
@@ -44,8 +46,8 @@ export interface Building {
   fetchedAt: string;
 }
 
-const BUILDING_SELECT = `SELECT label, osm_name AS osmName, kind, lat, lon, x, y, node, ring,
-  source, fetched_at AS fetchedAt FROM buildings`;
+const BUILDING_SELECT = `SELECT label, osm_name AS osmName, kind, gender, lat, lon, x, y, node,
+  ring, source, fetched_at AS fetchedAt FROM buildings`;
 
 /** Replace the whole map. Returns how many buildings got coordinates. */
 export function replaceCampus(map: CampusMap, at = new Date().toISOString()): number {
@@ -55,10 +57,12 @@ export function replaceCampus(map: CampusMap, at = new Date().toISOString()): nu
      ON CONFLICT(key) DO UPDATE SET payload = excluded.payload, fetched_at = excluded.fetched_at`,
   );
   const putBuilding = database.query(
-    `INSERT INTO buildings (label, osm_name, kind, lat, lon, x, y, node, ring, source, fetched_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO buildings (label, osm_name, kind, gender, lat, lon, x, y, node, ring, source,
+       fetched_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(label) DO UPDATE SET
-       osm_name = excluded.osm_name, kind = excluded.kind, lat = excluded.lat, lon = excluded.lon,
+       osm_name = excluded.osm_name, kind = excluded.kind, gender = excluded.gender,
+       lat = excluded.lat, lon = excluded.lon,
        x = excluded.x, y = excluded.y, node = excluded.node, ring = excluded.ring,
        source = excluded.source, fetched_at = excluded.fetched_at`,
   );
@@ -71,6 +75,7 @@ export function replaceCampus(map: CampusMap, at = new Date().toISOString()): nu
         label,
         anchor.name,
         anchor.kind,
+        anchor.gender,
         anchor.lat,
         anchor.lon,
         anchor.centre[0],

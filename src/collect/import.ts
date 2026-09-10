@@ -16,9 +16,11 @@ import { basename, join } from "node:path";
 import { replaceTerm, writeRule } from "../store/catalog";
 import { ingestHarvest } from "../store/harvest";
 import { finishSweep, startSweep } from "../store/history";
+import { forgetSchools, type Major, replaceMajors } from "../store/majors";
 import { upsertPeople } from "../store/people";
 import { replaceYear } from "../store/programs";
 import type { ProgramPage } from "./book";
+import { loadLabelsFile } from "./labels";
 
 const open = (path: string) => new Database(path, { readonly: true });
 
@@ -146,12 +148,50 @@ export function importHarvests(dir: string) {
   return terms;
 }
 
+/** cedarstalk-raycast's major-school.tsv: the registrar's own taxonomy. */
+export function importMajors(path: string) {
+  const rows: Major[] = [];
+  for (const line of readFileSync(path, "utf-8").split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const [program, level, department, school] = trimmed.split("\t");
+    if (!program || !level || program === "Program") continue;
+    rows.push({
+      program,
+      level,
+      department: department?.trim() || null,
+      school: school?.trim() || null,
+    });
+  }
+  const stored = replaceMajors(rows);
+  forgetSchools();
+  return { programs: stored, schools: new Set(rows.map((r) => r.school)).size };
+}
+
+/** cedar-major-pipeline's data/labels: known majors, for scoring the model. */
+export function importLabels(dir: string) {
+  const out: { source: string; matched: number; unmatched: number }[] = [];
+  for (const file of readdirSync(dir)
+    .filter((f) => f.endsWith(".csv"))
+    .sort()) {
+    const loaded = loadLabelsFile(join(dir, file));
+    out.push({
+      source: loaded.source,
+      matched: loaded.matched,
+      unmatched: loaded.unmatched.length,
+    });
+  }
+  return out;
+}
+
 /** Where the earlier projects keep their data, relative to a sibling checkout. */
 export const SIBLINGS = {
   directory: "../cedarstalk-raycast/data/directory.db",
   catalog: "../the-cedarville-app/.data/catalog.sqlite",
   book: "../the-cedarville-app/.data",
   harvests: "../cedar-major-pipeline/data/harvests",
+  majors: "../cedarstalk-raycast/data/major-school.tsv",
+  labels: "../cedar-major-pipeline/data/labels",
 };
 
 export interface ImportReport {
@@ -159,6 +199,8 @@ export interface ImportReport {
   catalog?: ReturnType<typeof importCatalog>;
   book?: ReturnType<typeof importBook>;
   harvests?: ReturnType<typeof importHarvests>;
+  majors?: ReturnType<typeof importMajors>;
+  labels?: ReturnType<typeof importLabels>;
   skipped: string[];
 }
 
@@ -190,6 +232,14 @@ export function importAll(paths: Partial<typeof SIBLINGS> = {}): ImportReport {
 
   if (existsSync(where.harvests)) report.harvests = importHarvests(where.harvests);
   else report.skipped.push(where.harvests);
+
+  if (existsSync(where.majors)) report.majors = importMajors(where.majors);
+  else report.skipped.push(where.majors);
+
+  // Labels last: they are matched against the directory by name, so the
+  // directory has to be in before they can attach to anybody.
+  if (existsSync(where.labels)) report.labels = importLabels(where.labels);
+  else report.skipped.push(where.labels);
 
   return report;
 }

@@ -8,6 +8,8 @@
  * how far one term gets you.
  */
 
+import { schoolOf } from "../store/majors";
+
 export const CLUSTERS: [RegExp, string][] = [
   [/engineer|computer science|cyber/i, "Engineering / CS"],
   [/nursing|dnp|allied health|exercise|sport medicine|nutrition|pre-?med/i, "Health"],
@@ -22,7 +24,18 @@ export const CLUSTERS: [RegExp, string][] = [
   [/education|mathematic|physics/i, "Education / Math / Physics"],
 ];
 
+/**
+ * The bucket a program belongs to.
+ *
+ * The registrar's own school is the right answer when we have it: it is the
+ * university's judgement rather than mine, and it covers programs no regex of
+ * mine anticipated. The patterns above stay as the fallback for a program the
+ * taxonomy has never heard of, and for a database that has not imported one.
+ */
 export function clusterOf(major: string): string {
+  if (!major) return "";
+  const school = schoolOf(major);
+  if (school) return school;
   for (const [pattern, name] of CLUSTERS) if (pattern.test(major)) return name;
-  return major ? "Other" : "";
+  return "Other";
 }

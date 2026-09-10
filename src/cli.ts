@@ -178,6 +178,8 @@ async function main(): Promise<void> {
         catalog: flag("catalog"),
         book: flag("book"),
         harvests: flag("harvests"),
+        majors: flag("majors"),
+        labels: flag("labels"),
       });
       if (report.directory) say("people", n(report.directory.people));
       if (report.catalog) {
@@ -187,6 +189,12 @@ async function main(): Promise<void> {
         say("rules", n(report.catalog.rules));
       }
       if (report.book) say("programs", `${n(report.book.programs)} (${report.book.year})`);
+      if (report.majors) {
+        say("majors", `${n(report.majors.programs)} in ${n(report.majors.schools)} schools`);
+      }
+      for (const labels of report.labels ?? []) {
+        say(labels.source, `${n(labels.matched)} known majors, ${n(labels.unmatched)} unmatched`);
+      }
       for (const term of report.harvests ?? []) {
         say(term.term, `${n(term.withBooks)} booklists of ${n(term.students)}`);
       }
@@ -317,7 +325,11 @@ async function main(): Promise<void> {
       say("terms", student.terms.join("+"));
       say("signal", `${student.signal} distinctive courses of ${student.courses.length}`);
       for (const guess of student.guesses) {
-        say("", `${pink(`${Math.round(guess.score * 100)}%`.padStart(4))}  ${guess.title}`);
+        const school = guess.school ? dim(`  ${guess.school}`) : "";
+        say(
+          "",
+          `${pink(`${Math.round(guess.score * 100)}%`.padStart(4))}  ${guess.title}${school}`,
+        );
       }
       return;
     }

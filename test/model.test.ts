@@ -3,6 +3,7 @@ import { useDatabase } from "../src/db";
 import { currentTerm } from "../src/lib/terms";
 import { clusterOf } from "../src/model/clusters";
 import { buildModel, forgetModel } from "../src/model/major";
+import { forgetSchools, replaceMajors, schoolOf } from "../src/store/majors";
 import { replaceYear } from "../src/store/programs";
 
 const page = (title: string, courses: string[], at = 1) => ({
@@ -80,5 +81,31 @@ describe("terms", () => {
     expect(currentTerm(new Date("2026-08-20"))).toBe("2026FA");
     expect(currentTerm(new Date("2027-02-01"))).toBe("2027SP");
     expect(currentTerm(new Date("2027-06-01"))).toBe("2027SU");
+  });
+});
+
+describe("the registrar's taxonomy", () => {
+  test("a book title finds its school despite the degree suffix", () => {
+    replaceMajors([
+      { program: "Chemistry", level: "major", department: "Science", school: "Science and Maths" },
+      { program: "Computer Engineering", level: "major", department: "ECS", school: "Engineering" },
+    ]);
+    forgetSchools();
+
+    expect(schoolOf("Chemistry — BA")).toBe("Science and Maths");
+    expect(schoolOf("Chemistry — BS")).toBe("Science and Maths");
+    expect(schoolOf("Computer Engineering")).toBe("Engineering");
+    expect(clusterOf("Chemistry — BS")).toBe("Science and Maths");
+  });
+
+  test("a program the taxonomy never heard of falls back to the patterns", () => {
+    replaceMajors([
+      { program: "Chemistry", level: "major", department: "Science", school: "Science and Maths" },
+    ]);
+    forgetSchools();
+
+    expect(schoolOf("Underwater Basket Weaving")).toBeNull();
+    expect(clusterOf("Mechanical Engineering")).toBe("Engineering / CS");
+    expect(clusterOf("")).toBe("");
   });
 });

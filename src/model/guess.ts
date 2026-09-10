@@ -5,8 +5,14 @@
  */
 
 import { fingerprintOf, fingerprints } from "../store/harvest";
+import { schoolOf } from "../store/majors";
 import { type Person, personById } from "../store/people";
 import { type Guess, model } from "./major";
+
+export interface Ranked extends Guess {
+  /** The registrar's school, when the taxonomy has been imported. */
+  school: string | null;
+}
 
 export interface StudentGuess {
   studentId: string;
@@ -15,8 +21,11 @@ export interface StudentGuess {
   terms: string[];
   courses: string[];
   signal: number;
-  guesses: Guess[];
+  guesses: Ranked[];
 }
+
+const withSchool = (guesses: Guess[]): Ranked[] =>
+  guesses.map((guess) => ({ ...guess, school: schoolOf(guess.title) }));
 
 const displayName = (person: Person | null) =>
   person ? `${person.nickname ?? person.firstName ?? ""} ${person.lastName ?? ""}`.trim() : null;
@@ -33,7 +42,7 @@ export function guessFor(studentId: string, top = 3, year?: string): StudentGues
     terms: fingerprint.terms,
     courses: fingerprint.courses,
     signal,
-    guesses: ranked.slice(0, top),
+    guesses: withSchool(ranked.slice(0, top)),
   };
 }
 
@@ -51,7 +60,7 @@ export function guessAll(top = 3, year?: string): StudentGuess[] {
       terms: fingerprint.terms,
       courses: fingerprint.courses,
       signal,
-      guesses: ranked.slice(0, top),
+      guesses: withSchool(ranked.slice(0, top)),
     });
   }
   return out.sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
