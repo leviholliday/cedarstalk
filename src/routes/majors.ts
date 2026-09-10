@@ -2,7 +2,7 @@
 
 import { json, num, q } from "../lib/http";
 import { evaluate } from "../model/evaluate";
-import { guessAll } from "../model/guess";
+import { distribution, guessAll } from "../model/guess";
 import { model } from "../model/major";
 import { harvestTerms, metricHistory } from "../store/harvest";
 import { termChurn } from "../store/history";
@@ -29,6 +29,17 @@ export const majorRoutes: RouteDef[] = [
         .slice(0, limit);
       return json({ terms: harvestTerms(), students: guesses.length, guesses });
     },
+  },
+  {
+    method: "GET",
+    path: "/v1/majors/distribution",
+    tag: "majors",
+    summary: "What the population appears to be studying, counted by top guess",
+    query: [
+      { name: "min", description: "Distinctive courses required to count, default 2" },
+      { name: "year", description: "Catalog year" },
+    ],
+    handler: (_request, url) => json(distribution(num(url, "min") ?? 2, q(url, "year"))),
   },
   {
     method: "GET",

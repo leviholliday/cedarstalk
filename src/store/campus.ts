@@ -141,14 +141,28 @@ export function locate(studentId: string): Located | null {
     .get(studentId);
 }
 
-/** Everyone with a building, for drawing the campus as a population. */
+/**
+ * Everyone with a building, split by why they are there.
+ *
+ * A dorm and a department office are both "people at a building" and nothing
+ * else about them is alike. Collapsing the two makes a lecture hall look like
+ * graduate housing because fifteen graduate staff have desks in it — so
+ * residents and workers are counted apart, and anything drawing this has to
+ * decide which it means.
+ */
 export interface Occupancy {
   label: string;
   kind: string | null;
+  gender: string | null;
   lat: number | null;
   lon: number | null;
   people: number;
+  residents: number;
+  workers: number;
+  /** Buckets among residents — the ones the building actually houses. */
   breakdown: Record<string, number>;
+  /** The same buckets among people whose office is here. */
+  offices: Record<string, number>;
 }
 
 export function occupancy(by: "class" | "type" | "department" = "class"): Occupancy[] {
@@ -158,19 +172,22 @@ export function occupancy(by: "class" | "type" | "department" = "class"): Occupa
       {
         label: string;
         kind: string | null;
+        gender: string | null;
         lat: number | null;
         lon: number | null;
+        role: string;
         bucket: string;
         n: number;
       },
       []
     >(
-      `SELECT b.label, b.kind, b.lat, b.lon,
+      `SELECT b.label, b.kind, b.gender, b.lat, b.lon,
+              CASE WHEN p.dorm_name = b.label THEN 'resident' ELSE 'worker' END AS role,
               COALESCE(p.${column}, 'unknown') AS bucket, COUNT(*) AS n
        FROM people p
        JOIN buildings b ON b.label = COALESCE(p.dorm_name, p.office_name)
        WHERE p.present = 1
-       GROUP BY b.label, bucket`,
+       GROUP BY b.label, role, bucket`,
     )
     .all();
 
@@ -181,15 +198,25 @@ export function occupancy(by: "class" | "type" | "department" = "class"): Occupa
       entry = {
         label: row.label,
         kind: row.kind,
+        gender: row.gender,
         lat: row.lat,
         lon: row.lon,
         people: 0,
+        residents: 0,
+        workers: 0,
         breakdown: {},
+        offices: {},
       };
       out.set(row.label, entry);
     }
     entry.people += row.n;
-    entry.breakdown[row.bucket] = row.n;
+    if (row.role === "resident") {
+      entry.residents += row.n;
+      entry.breakdown[row.bucket] = (entry.breakdown[row.bucket] ?? 0) + row.n;
+    } else {
+      entry.workers += row.n;
+      entry.offices[row.bucket] = (entry.offices[row.bucket] ?? 0) + row.n;
+    }
   }
   return [...out.values()].sort((a, b) => b.people - a.people);
 }

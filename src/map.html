@@ -61,7 +61,13 @@
       svg { width: 100%; height: 100%; display: block; cursor: grab; }
       svg.dragging { cursor: grabbing; }
       .path { stroke: #322c26; stroke-width: 1.4; fill: none; stroke-linecap: round; }
-      .walked { stroke: #e0913f; fill: none; stroke-linecap: round; pointer-events: none; }
+      .walked {
+        stroke: #e0913f;
+        fill: none;
+        stroke-linecap: butt;
+        stroke-linejoin: round;
+        pointer-events: none;
+      }
       .plot { fill: #221e19; stroke: #2b2621; stroke-width: 0.6; }
       .place { stroke: #14120f; stroke-width: 0.8; cursor: pointer; }
       .place:hover, .pin:hover { stroke: var(--ink); stroke-width: 1.6; }
@@ -188,8 +194,11 @@
         const seat = byLabel.get(place.label);
         if (mode === "gender") return GENDER_INK[place.gender] ?? OTHER_INK;
         if (mode === "class") {
-          const counts = seat?.breakdown ?? {};
-          const top = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
+          // Residents only. A lecture hall where fifteen graduate staff have
+          // desks is not graduate housing, and colouring it as though it were
+          // is how a chart tells a lie without a single wrong number.
+          if (!seat?.residents) return OTHER_INK;
+          const top = Object.entries(seat.breakdown).sort((a, b) => b[1] - a[1])[0];
           return (top && CLASS_INK[top[0]]) ?? OTHER_INK;
         }
         return peopleInk(seat?.people ?? 0, most);
@@ -232,15 +241,15 @@
         const walked = showTraffic && traffic
           ? traffic.buckets
               .map((bucket) => {
-                const d = bucket.edges
-                  .map(([a, b]) => {
-                    const from = campus.nodes[a];
-                    const to = campus.nodes[b];
-                    return `M${from[0]} ${from[1]}L${to[0]} ${to[1]}`;
-                  })
+                const d = bucket.paths
+                  .map((run) =>
+                    run
+                      .map((node, i) => `${i ? "L" : "M"}${campus.nodes[node].join(" ")}`)
+                      .join(""),
+                  )
                   .join("");
                 return `<path class="walked" d="${d}" stroke-width="${(1.2 + 7 * bucket.share).toFixed(2)}"
-                  stroke-opacity="${(0.18 + 0.62 * bucket.share).toFixed(2)}" />`;
+                  stroke-opacity="${(0.16 + 0.6 * bucket.share).toFixed(2)}" />`;
               })
               .join("")
           : "";
@@ -333,10 +342,14 @@
           node.innerHTML =
             Object.entries(GENDER_INK)
               .map(([name, ink]) => swatch(ink, name))
-              .join("") + walked;
+              .join("") +
+            swatch(OTHER_INK, "not a hall") +
+            walked;
         } else if (mode === "class") {
           node.innerHTML =
-            CLASS_ORDER.map((code) => swatch(CLASS_INK[code], className(code))).join("") + walked;
+            CLASS_ORDER.map((code) => swatch(CLASS_INK[code], className(code))).join("") +
+            swatch(OTHER_INK, "nobody lives there") +
+            walked;
         } else {
           node.innerHTML = `${swatch(peopleInk(1, most), "1")} ${swatch(
             peopleInk(most / 4, most),
@@ -368,14 +381,18 @@
 
         // One marker may stand for several buildings, so break the count back
         // down rather than showing a total nobody can check.
+        const residents = shown.reduce((sum, p) => sum + (byLabel.get(p.label)?.residents ?? 0), 0);
+        const workers = shown.reduce((sum, p) => sum + (byLabel.get(p.label)?.workers ?? 0), 0);
+
         const breakdown = new Map();
         for (const place of shown) {
           const seat = byLabel.get(place.label);
           if (shown.length > 1) breakdown.set(place.label, seat?.people ?? 0);
           else {
-            for (const [bucket, n] of Object.entries(seat?.breakdown ?? {})) {
-              breakdown.set(bucket, n);
-            }
+            // Whichever the building actually is: its residents by class, or,
+            // when nobody lives there, whose offices are in it.
+            const source = seat?.residents ? seat.breakdown : (seat?.offices ?? {});
+            for (const [bucket, n] of Object.entries(source)) breakdown.set(bucket, n);
           }
         }
         const rows = [...breakdown.entries()]
@@ -390,7 +407,15 @@
           <h2>${escape(commonName(shown.map((p) => p.label)))}</h2>
           <p>${escape(first.kind)}${first.gender ? ` · ${escape(first.gender)}` : ""} ·
              ${escape(first.source)}${first.source === "pin" ? " (position only)" : ""}</p>
-          <p>${people} listed here · ${first.lat.toFixed(5)}, ${first.lon.toFixed(5)}</p>
+          <p>${
+            [
+              residents ? `${residents} live here` : "",
+              workers ? `${workers} work here` : "",
+              residents || workers ? "" : `${people} listed here`,
+            ]
+              .filter(Boolean)
+              .join(" · ")
+          } · ${first.lat.toFixed(5)}, ${first.lon.toFixed(5)}</p>
           ${rows ? `<table>${rows}</table>` : ""}`;
       }
 

@@ -7,7 +7,9 @@ import {
   readRule,
   searchCourses,
   searchSections,
+  subjectLoad,
   termStats,
+  timetable,
 } from "../store/catalog";
 import { latestYear, listPrograms, programByPage, programYears } from "../store/programs";
 import type { RouteDef } from "./types";
@@ -21,6 +23,17 @@ export const catalogRoutes: RouteDef[] = [
     tag: "catalog",
     summary: "Terms held locally, with how much of each",
     handler: () => json({ terms: termStats() }),
+  },
+  {
+    method: "GET",
+    path: "/v1/timetable",
+    tag: "catalog",
+    summary: "Sections and enrolment by weekday and hour, plus enrolment by subject",
+    query: [{ name: "term", description: "Term code", required: true }],
+    handler: (_request, url) => {
+      const term = required(url, "term");
+      return json({ term, cells: timetable(term), subjects: subjectLoad(term) });
+    },
   },
   {
     method: "GET",

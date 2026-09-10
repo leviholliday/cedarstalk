@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, test } from "bun:test";
 import { planBooklists, planDirectory } from "../src/collect/plan";
 import { db, useDatabase } from "../src/db";
 import { adjacencyOf, shortestPath } from "../src/lib/route";
+import { chain } from "../src/model/traffic";
 import { ingestHarvest } from "../src/store/harvest";
 import { upsertPeople } from "../src/store/people";
 
@@ -115,5 +116,47 @@ describe("walking the campus", () => {
   test("an unreachable corner is null rather than an empty route", () => {
     const split = { nodes: graph.nodes, edges: [[0, 1, 10]] as [number, number, number][] };
     expect(shortestPath(split, 0, 2)).toBeNull();
+  });
+});
+
+describe("threading traffic into strokes", () => {
+  test("a straight run becomes one path", () => {
+    const runs = chain([
+      [0, 1],
+      [1, 2],
+      [2, 3],
+    ]);
+    expect(runs).toEqual([[0, 1, 2, 3]]);
+  });
+
+  test("every edge is drawn exactly once", () => {
+    // A junction: one edge in, three out. It cannot be one stroke.
+    const edges: [number, number][] = [
+      [0, 1],
+      [1, 2],
+      [1, 3],
+      [1, 4],
+    ];
+    const runs = chain(edges);
+    const drawn = runs.flatMap((run) =>
+      run.slice(1).map((node, i) => [Math.min(run[i]!, node), Math.max(run[i]!, node)].join(":")),
+    );
+    expect(drawn.sort()).toEqual(["0:1", "1:2", "1:3", "1:4"]);
+    expect(new Set(drawn).size).toBe(drawn.length);
+  });
+
+  test("a loop closes rather than leaving a stub", () => {
+    const runs = chain([
+      [0, 1],
+      [1, 2],
+      [2, 0],
+    ]);
+    expect(runs).toHaveLength(1);
+    expect(runs[0]).toHaveLength(4);
+    expect(runs[0]?.at(0)).toBe(runs[0]?.at(-1));
+  });
+
+  test("nothing in, nothing out", () => {
+    expect(chain([])).toEqual([]);
   });
 });

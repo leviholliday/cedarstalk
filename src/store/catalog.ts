@@ -255,6 +255,65 @@ export function meetingBuildings(term?: string): string[] {
   return [...names].sort();
 }
 
+export interface TimetableCell {
+  /** 1 is Monday, as Colleague numbers them. */
+  day: number;
+  /** Hour the meeting starts, 24-hour. */
+  hour: number;
+  sections: number;
+  seats: number;
+}
+
+/**
+ * When campus is actually in class.
+ *
+ * A section that meets Monday, Wednesday and Friday is three cells, not one:
+ * the question is how busy a given hour is, and that section fills the room
+ * three times. Seats are the enrolment, so an 8am lecture for two hundred
+ * outweighs a seminar for nine.
+ */
+export function timetable(term: string): TimetableCell[] {
+  const rows = db()
+    .query<{ payload: string }, [string]>("SELECT payload FROM sections WHERE term = ?")
+    .all(term);
+
+  const cells = new Map<string, TimetableCell>();
+  for (const row of rows) {
+    const section = JSON.parse(row.payload) as {
+      Enrolled?: number;
+      FormattedMeetingTimes?: { Days?: number[]; StartTime?: string; IsOnline?: boolean }[];
+    };
+    for (const meeting of section.FormattedMeetingTimes ?? []) {
+      if (meeting.IsOnline || !meeting.StartTime) continue;
+      const hour = Number(meeting.StartTime.slice(0, 2));
+      if (!Number.isFinite(hour)) continue;
+      for (const day of meeting.Days ?? []) {
+        const key = `${day}:${hour}`;
+        const cell = cells.get(key) ?? { day, hour, sections: 0, seats: 0 };
+        cell.sections++;
+        cell.seats += section.Enrolled ?? 0;
+        cells.set(key, cell);
+      }
+    }
+  }
+  return [...cells.values()].sort((a, b) => a.day - b.day || a.hour - b.hour);
+}
+
+/** Enrolment against capacity, by subject. How full is what. */
+export const subjectLoad = (
+  term: string,
+): { subject: string; sections: number; enrolled: number; capacity: number }[] =>
+  db()
+    .query<{ subject: string; sections: number; enrolled: number; capacity: number }, [string]>(
+      `SELECT substr(code, 1, instr(code, '-') - 1) AS subject,
+              COUNT(*) AS sections,
+              SUM(COALESCE(capacity, 0) - COALESCE(available, 0)) AS enrolled,
+              SUM(COALESCE(capacity, 0)) AS capacity
+       FROM sections WHERE term = ? AND code IS NOT NULL AND instr(code, '-') > 1
+       GROUP BY subject ORDER BY enrolled DESC`,
+    )
+    .all(term);
+
 export interface TermStats {
   term: string;
   sections: number;

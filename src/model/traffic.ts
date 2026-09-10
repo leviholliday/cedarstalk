@@ -24,7 +24,60 @@ export interface TrafficBucket {
   level: number;
   /** Share of the busiest edge's load, at the middle of this band. */
   share: number;
-  edges: [number, number][];
+  /**
+   * Runs of connected nodes rather than loose segments.
+   *
+   * Drawn a segment at a time, every junction grows a bead where the round
+   * caps of four separate strokes pile up. Chained, a path is one stroke that
+   * joins itself, which is also what it is.
+   */
+  paths: number[][];
+}
+
+/**
+ * Thread a bucket's edges into as few continuous runs as possible.
+ *
+ * A trail decomposition, greedily: start where a run must start (a node with
+ * an odd number of edges), then walk unused edges until stuck. Every edge ends
+ * up in exactly one run.
+ */
+export function chain(edges: [number, number][]): number[][] {
+  const adjacency = new Map<number, number[]>();
+  const add = (from: number, to: number) => {
+    const held = adjacency.get(from);
+    if (held) held.push(to);
+    else adjacency.set(from, [to]);
+  };
+  for (const [a, b] of edges) {
+    add(a, b);
+    add(b, a);
+  }
+
+  const used = new Set<string>();
+  const key = (a: number, b: number) => `${Math.min(a, b)}:${Math.max(a, b)}`;
+  const runs: number[][] = [];
+
+  const walk = (start: number) => {
+    let run: number[] = [start];
+    let at = start;
+    for (;;) {
+      const next = (adjacency.get(at) ?? []).find((other) => !used.has(key(at, other)));
+      if (next === undefined) break;
+      used.add(key(at, next));
+      run.push(next);
+      at = next;
+    }
+    if (run.length > 1) runs.push(run);
+    run = [];
+  };
+
+  // Odd-degree nodes first: a run that starts anywhere else leaves stubs.
+  const nodes = [...adjacency.keys()];
+  for (const node of nodes.filter((n) => (adjacency.get(n)?.length ?? 0) % 2 === 1)) walk(node);
+  for (const node of nodes) {
+    while ((adjacency.get(node) ?? []).some((other) => !used.has(key(node, other)))) walk(node);
+  }
+  return runs;
 }
 
 export interface Traffic {
@@ -136,23 +189,24 @@ export function campusTraffic(term: string): Traffic {
   }
 
   const busiest = Math.max(1, ...load.values());
-  const buckets: TrafficBucket[] = Array.from({ length: BUCKETS }, (_, i) => ({
-    level: i + 1,
-    share: (i + 0.5) / BUCKETS,
-    edges: [],
-  }));
+  const banded: [number, number][][] = Array.from({ length: BUCKETS }, () => []);
   for (const [key, count] of load) {
     const level = Math.min(BUCKETS - 1, Math.floor((count / busiest) * BUCKETS));
     const [a, b] = key.split(":").map(Number);
-    buckets[level]!.edges.push([a!, b!]);
+    banded[level]!.push([a!, b!]);
   }
+  const buckets: TrafficBucket[] = banded.map((edges, i) => ({
+    level: i + 1,
+    share: (i + 0.5) / BUCKETS,
+    paths: chain(edges),
+  }));
 
   return {
     term,
     students: counted,
     trips: Math.round(trips),
     busiest: Math.round(busiest),
-    buckets: buckets.filter((bucket) => bucket.edges.length),
+    buckets: buckets.filter((bucket) => bucket.paths.length),
     destinations: [...destinations]
       .map(([label, count]) => ({ label, trips: Math.round(count) }))
       .sort((a, b) => b.trips - a.trips),
