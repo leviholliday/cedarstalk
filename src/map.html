@@ -1,0 +1,445 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>cedarengine · campus</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --ink: #ece7df;
+        --dim: #8b8378;
+        --bg: #14120f;
+        --panel: #1c1916;
+        --line: #2b2621;
+        --pink: #ff87d7;
+        --blue: #5fafff;
+        --amber: #d7af5f;
+      }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body {
+        background: var(--bg);
+        color: var(--ink);
+        font: 13px/1.6 "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      header {
+        display: flex;
+        align-items: baseline;
+        gap: 1.25rem;
+        padding: 0.9rem 1.25rem;
+        border-bottom: 1px solid var(--line);
+        flex-wrap: wrap;
+      }
+      h1 {
+        font-family: "Instrument Serif", Georgia, serif;
+        font-size: 1.5rem;
+        font-weight: 400;
+      }
+      h1 em { color: var(--pink); font-style: italic; }
+      nav { display: flex; gap: 0.4rem; margin-left: auto; align-items: center; }
+      button {
+        background: transparent;
+        border: 1px solid var(--line);
+        color: var(--dim);
+        font: inherit;
+        font-size: 11px;
+        padding: 0.25rem 0.7rem;
+        cursor: pointer;
+      }
+      button[aria-pressed="true"] { background: var(--pink); color: #14120f; border-color: var(--pink); }
+      a { color: var(--blue); font-size: 11px; }
+      main { flex: 1; position: relative; overflow: hidden; }
+      svg { width: 100%; height: 100%; display: block; cursor: grab; }
+      svg.dragging { cursor: grabbing; }
+      .path { stroke: #322c26; stroke-width: 1.4; fill: none; stroke-linecap: round; }
+      .plot { fill: #221e19; stroke: #2b2621; stroke-width: 0.6; }
+      .place { stroke: #14120f; stroke-width: 0.8; cursor: pointer; }
+      .place:hover, .pin:hover { stroke: var(--ink); stroke-width: 1.6; }
+      .pin { cursor: pointer; stroke: #14120f; stroke-width: 0.8; }
+      .label {
+        fill: var(--dim);
+        font-size: 8px;
+        text-anchor: middle;
+        pointer-events: none;
+        font-family: "JetBrains Mono", monospace;
+      }
+      aside {
+        position: absolute;
+        top: 1rem;
+        left: 1rem;
+        background: rgba(20, 18, 15, 0.94);
+        border: 1px solid var(--line);
+        padding: 0.8rem 0.95rem;
+        max-width: 290px;
+        pointer-events: none;
+      }
+      aside h2 {
+        font-family: "Instrument Serif", Georgia, serif;
+        font-size: 1.15rem;
+        font-weight: 400;
+        margin-bottom: 0.15rem;
+      }
+      aside p { color: var(--dim); font-size: 11px; }
+      aside table { width: 100%; margin-top: 0.5rem; font-size: 11px; }
+      aside td { padding: 0.05rem 0; }
+      aside td.n { text-align: right; font-variant-numeric: tabular-nums; color: var(--ink); }
+      .legend {
+        position: absolute;
+        bottom: 1rem;
+        left: 1rem;
+        display: flex;
+        gap: 0.75rem;
+        align-items: center;
+        font-size: 11px;
+        color: var(--dim);
+        background: rgba(20, 18, 15, 0.94);
+        border: 1px solid var(--line);
+        padding: 0.4rem 0.7rem;
+      }
+      .swatch { display: inline-block; width: 10px; height: 10px; vertical-align: -1px; margin-right: 4px; }
+      .gate { margin: 20vh auto; max-width: 420px; text-align: center; color: var(--dim); }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>cedar<em>engine</em></h1>
+      <span id="summary" style="color: var(--dim); font-size: 11px"></span>
+      <nav>
+        <button type="button" id="by-people" aria-pressed="true">people</button>
+        <button type="button" id="by-gender" aria-pressed="false">gender</button>
+        <button type="button" id="by-class" aria-pressed="false">class</button>
+        <button type="button" id="paths" aria-pressed="true">paths</button>
+        <a href="/">dashboard</a>
+      </nav>
+    </header>
+    <main id="main"><div class="gate">loading the campus…</div></main>
+
+    <script type="module">
+      const KEY = "cedarengine.token";
+      const main = document.getElementById("main");
+      const summary = document.getElementById("summary");
+
+      const api = async (path) => {
+        const res = await fetch(path, {
+          headers: { authorization: `Bearer ${localStorage.getItem(KEY) ?? ""}` },
+        });
+        if (res.status === 401) throw new Error("unauthorised");
+        if (!res.ok) throw new Error(`${path} returned ${res.status}`);
+        return res.json();
+      };
+
+      const CLASS_INK = { FR: "#5fafff", SO: "#63c8a0", JR: "#d7af5f", SR: "#ff87d7" };
+      const GENDER_INK = { male: "#5fafff", female: "#ff87d7", mixed: "#d7af5f" };
+      const escape = (text) =>
+        String(text ?? "").replace(/[<>&"]/g, (c) => `&#${c.charCodeAt(0)};`);
+
+      let mode = "people";
+      let showPaths = true;
+      let campus;
+      let places;
+      let byLabel;
+
+      /** People per building, warmest where the most live. */
+      function peopleInk(count, most) {
+        if (!count) return "#241f1b";
+        const t = Math.sqrt(count / most); // sqrt, or three big dorms flatten the rest
+        const from = [36, 31, 27];
+        const to = [255, 135, 215];
+        return `rgb(${from.map((c, i) => Math.round(c + (to[i] - c) * t)).join(",")})`;
+      }
+
+      function inkOf(place) {
+        const seat = byLabel.get(place.label);
+        if (mode === "gender") return GENDER_INK[place.gender] ?? "#241f1b";
+        if (mode === "class") {
+          const counts = seat?.breakdown ?? {};
+          const top = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
+          return (top && CLASS_INK[top[0]]) ?? "#3a3129";
+        }
+        return peopleInk(seat?.people ?? 0, most);
+      }
+
+      let most = 1;
+
+      /**
+       * Frame the campus, not the county.
+       *
+       * The stored box spans every anchored building, and two of those are a
+       * mile off — Cedar Park down in the village, Davis House up past the
+       * fields. Framing on all of them leaves the actual campus a thumbnail in
+       * the middle. So the opening view is the middle 90% of where people
+       * actually are; the outliers are still drawn, a scroll away.
+       */
+      function frame() {
+        const xs = places.map((p) => p.x).sort((a, b) => a - b);
+        const ys = places.map((p) => p.y).sort((a, b) => a - b);
+        const at = (list, q) => list[Math.min(list.length - 1, Math.floor(list.length * q))];
+        return [at(xs, 0.05), at(ys, 0.05), at(xs, 0.95), at(ys, 0.95)];
+      }
+
+      function draw() {
+        const [x0, y0, x1, y1] = frame();
+        const pad = 120;
+        const shapes = [];
+
+        // Everything OSM drew, as context: the campus is more legible with the
+        // buildings nobody in the directory lives in still faintly present.
+        for (const building of campus.buildings) {
+          if (building.focus) continue;
+          shapes.push(
+            `<polygon class="plot" points="${building.ring.map((p) => p.join(",")).join(" ")}" />`,
+          );
+        }
+
+        const paths = showPaths
+          ? campus.edges
+              .map(([a, b]) => {
+                const from = campus.nodes[a];
+                const to = campus.nodes[b];
+                return `M${from[0]} ${from[1]}L${to[0]} ${to[1]}`;
+              })
+              .join("")
+          : "";
+
+        // Pinned buildings that share a position are one marker, not four
+        // stacked circles with only the last one clickable. The College View
+        // blocks are a single site as far as anything here knows.
+        const grouped = new Map();
+        const labelled = [];
+
+        for (const place of places) {
+          const seat = byLabel.get(place.label);
+          const people = seat?.people ?? 0;
+
+          if (place.ring.length > 2) {
+            const title = `${place.label} — ${people} ${people === 1 ? "person" : "people"}`;
+            shapes.push(
+              `<polygon class="place" data-label="${escape(place.label)}" fill="${inkOf(place)}"
+                points="${place.ring.map((p) => p.join(",")).join(" ")}"><title>${escape(title)}</title></polygon>`,
+            );
+            labelled.push([place.x, place.y, place.label, people]);
+            continue;
+          }
+
+          const key = `${place.x},${place.y}`;
+          const held = grouped.get(key) ?? { places: [], people: 0, x: place.x, y: place.y };
+          held.places.push(place);
+          held.people += people;
+          grouped.set(key, held);
+        }
+
+        for (const spot of grouped.values()) {
+          const names = spot.places.map((p) => p.label);
+          const shared = commonName(names);
+          const title = `${shared} — ${spot.people} people${
+            names.length > 1 ? ` across ${names.length}` : ""
+          }`;
+          // A pinned building has a position and no footprint, so it is drawn as
+          // what it is: a point, sized by how many people it holds.
+          shapes.push(
+            `<circle class="pin" data-label="${escape(names.join("|"))}"
+              cx="${spot.x}" cy="${spot.y}" r="${6 + Math.sqrt(spot.people)}"
+              fill="${inkOf(spot.places[0])}"><title>${escape(title)}</title></circle>`,
+          );
+          labelled.push([spot.x, spot.y, shared, spot.people]);
+        }
+
+        const names = labelled
+          .filter(([, , , people]) => people >= 15)
+          .map(([x, y, label]) => `<text class="label" x="${x}" y="${y - 12}">${escape(label)}</text>`)
+          .join("");
+
+        main.innerHTML = `
+          <svg viewBox="${x0 - pad} ${y0 - pad} ${x1 - x0 + pad * 2} ${y1 - y0 + pad * 2}">
+            <g id="camera">
+              ${shapes.join("")}
+              <path class="path" d="${paths}" />
+              ${names}
+            </g>
+          </svg>
+          <aside id="card"><h2>campus</h2><p>hover a building</p></aside>
+          <div class="legend" id="legend"></div>`;
+
+        legend();
+        wire();
+      }
+
+      function legend() {
+        const swatch = (ink, text) =>
+          `<span><i class="swatch" style="background:${ink}"></i>${text}</span>`;
+        const node = document.getElementById("legend");
+        if (mode === "gender") {
+          node.innerHTML = Object.entries(GENDER_INK)
+            .map(([name, ink]) => swatch(ink, name))
+            .join("");
+        } else if (mode === "class") {
+          node.innerHTML = Object.entries(CLASS_INK)
+            .map(([name, ink]) => swatch(ink, name))
+            .join("");
+        } else {
+          node.innerHTML = `${swatch(peopleInk(1, most), "1")} ${swatch(
+            peopleInk(most / 4, most),
+            Math.round(most / 4),
+          )} ${swatch(peopleInk(most, most), most)} <span>people listed there</span>`;
+        }
+      }
+
+      /** "College View Apartment A".."D" is one place with four doors. */
+      function commonName(names) {
+        if (names.length === 1) return names[0];
+        const [first] = names;
+        let cut = first.length;
+        for (const name of names.slice(1)) {
+          let i = 0;
+          while (i < cut && i < name.length && first[i] === name[i]) i++;
+          cut = i;
+        }
+        const prefix = first.slice(0, cut).replace(/[\s-]+$/, "");
+        // "OPS" is a short prefix but a real name; two characters is the line.
+        return prefix.length >= 2 ? `${prefix} ×${names.length}` : `${names.length} places`;
+      }
+
+      function card(labels) {
+        const chosen = labels.split("|");
+        const shown = places.filter((p) => chosen.includes(p.label));
+        const first = shown[0];
+        const people = shown.reduce((sum, p) => sum + (byLabel.get(p.label)?.people ?? 0), 0);
+
+        // One marker may stand for several buildings, so break the count back
+        // down rather than showing a total nobody can check.
+        const breakdown = new Map();
+        for (const place of shown) {
+          const seat = byLabel.get(place.label);
+          if (shown.length > 1) breakdown.set(place.label, seat?.people ?? 0);
+          else {
+            for (const [bucket, n] of Object.entries(seat?.breakdown ?? {})) {
+              breakdown.set(bucket, n);
+            }
+          }
+        }
+        const rows = [...breakdown.entries()]
+          .sort((a, b) => b[1] - a[1])
+          .map(([name, n]) => `<tr><td>${escape(name)}</td><td class="n">${n}</td></tr>`)
+          .join("");
+
+        document.getElementById("card").innerHTML = `
+          <h2>${escape(commonName(shown.map((p) => p.label)))}</h2>
+          <p>${escape(first.kind)}${first.gender ? ` · ${escape(first.gender)}` : ""} ·
+             ${escape(first.source)}${first.source === "pin" ? " (position only)" : ""}</p>
+          <p>${people} listed here · ${first.lat.toFixed(5)}, ${first.lon.toFixed(5)}</p>
+          ${rows ? `<table>${rows}</table>` : ""}`;
+      }
+
+      /** Pan and zoom, kept in the SVG's own units so nothing has to re-render. */
+      function wire() {
+        const svg = main.querySelector("svg");
+        const camera = main.querySelector("#camera");
+        let scale = 1;
+        let panX = 0;
+        let panY = 0;
+        let dragging = null;
+
+        const apply = () =>
+          camera.setAttribute("transform", `translate(${panX} ${panY}) scale(${scale})`);
+
+        svg.addEventListener("wheel", (event) => {
+          event.preventDefault();
+          const box = svg.getBoundingClientRect();
+          const view = svg.viewBox.baseVal;
+          const units = view.width / box.width;
+          const x = (event.clientX - box.left) * units + view.x;
+          const y = (event.clientY - box.top) * units + view.y;
+          const step = Math.exp(-event.deltaY * 0.0015);
+          const next = Math.min(Math.max(scale * step, 0.5), 12);
+          // Zoom about the cursor: the point under it must not move.
+          panX = x - ((x - panX) / scale) * next;
+          panY = y - ((y - panY) / scale) * next;
+          scale = next;
+          apply();
+        }, { passive: false });
+
+        svg.addEventListener("pointerdown", (event) => {
+          dragging = { x: event.clientX, y: event.clientY, panX, panY };
+          svg.classList.add("dragging");
+          svg.setPointerCapture(event.pointerId);
+        });
+        svg.addEventListener("pointermove", (event) => {
+          if (dragging) {
+            const box = svg.getBoundingClientRect();
+            const units = svg.viewBox.baseVal.width / box.width;
+            panX = dragging.panX + (event.clientX - dragging.x) * units;
+            panY = dragging.panY + (event.clientY - dragging.y) * units;
+            apply();
+            return;
+          }
+          const label = event.target.dataset?.label;
+          if (label) card(label);
+        });
+        const release = (event) => {
+          dragging = null;
+          svg.classList.remove("dragging");
+          if (event.pointerId !== undefined) svg.releasePointerCapture?.(event.pointerId);
+        };
+        svg.addEventListener("pointerup", release);
+        svg.addEventListener("pointercancel", release);
+      }
+
+      const button = (id, onClick) => {
+        const node = document.getElementById(id);
+        node.onclick = () => onClick(node);
+      };
+
+      for (const [id, next] of [
+        ["by-people", "people"],
+        ["by-gender", "gender"],
+        ["by-class", "class"],
+      ]) {
+        button(id, () => {
+          mode = next;
+          for (const other of ["by-people", "by-gender", "by-class"]) {
+            document.getElementById(other).setAttribute("aria-pressed", String(other === id));
+          }
+          draw();
+        });
+      }
+      button("paths", (node) => {
+        showPaths = !showPaths;
+        node.setAttribute("aria-pressed", String(showPaths));
+        draw();
+      });
+
+      try {
+        const [map, buildings, seats] = await Promise.all([
+          api("/v1/campus/map?graph=1"),
+          api("/v1/campus/buildings"),
+          api(`/v1/campus/occupancy?by=class`),
+        ]);
+        campus = map;
+        places = buildings.buildings;
+        byLabel = new Map(seats.buildings.map((row) => [row.label, row]));
+        most = Math.max(1, ...seats.buildings.map((row) => row.people));
+
+        const total = seats.buildings.reduce((sum, row) => sum + row.people, 0);
+        summary.textContent =
+          `${places.length} buildings · ${total.toLocaleString("en-US")} people placed · ` +
+          `${map.nodes.length.toLocaleString("en-US")} path nodes` +
+          (buildings.unmapped.length ? ` · ${buildings.unmapped.length} unmapped` : "");
+        draw();
+      } catch (error) {
+        main.innerHTML =
+          error.message === "unauthorised"
+            ? `<div class="gate">this page reads the same token the <a href="/">dashboard</a> holds — unlock there first</div>`
+            : `<div class="gate">${escape(error.message)}</div>`;
+      }
+    </script>
+  </body>
+</html>

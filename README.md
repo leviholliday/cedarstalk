@@ -125,6 +125,12 @@ Hall is the 2013 townhouse OSM still calls "Townhouse 2" — so
 `src/collect/assets/buildings.tsv` maps the directory's shorthand onto the name
 each source uses, with fuzzy matching as the fallback rather than the rule.
 
+`/map` draws it: outlines in SVG, the walking graph underneath, buildings shaded
+by how many people are listed there, or by hall gender, or by which class holds
+the plurality. Pinned buildings are drawn as points rather than invented
+footprints, and the ones sharing a position — the four College View blocks, the
+three OPS shops — are one marker that breaks back down on hover.
+
 Since everybody in the directory already carries a dorm or an office, that is
 all it takes to put the whole population on the map:
 

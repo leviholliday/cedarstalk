@@ -14,6 +14,7 @@ import dashboard from "./dashboard.html";
 import { record, trim } from "./lib/analytics";
 import { errorResponse, json, unauthorized } from "./lib/http";
 import { openapi } from "./lib/openapi";
+import map from "./map.html";
 import { routes } from "./routes";
 import type { RouteDef, RouteRequest } from "./routes/types";
 
@@ -66,6 +67,7 @@ const server = serve({
   routes: {
     ...table,
     "/": dashboard,
+    "/map": map,
     "/openapi.json": () => json(spec),
   },
   fetch: () => json({ error: "not found" }, 404),
