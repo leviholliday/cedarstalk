@@ -145,7 +145,12 @@
           load();
         };
         document.getElementById("go").onclick = submit;
-        document.getElementById("token").onkeydown = (e) => e.key === "Enter" && submit();
+        // Braces matter: an arrow body returning false from onkeydown cancels the
+        // keystroke, and `e.key === "Enter" && submit()` is false for every other
+        // key — which is a token box you cannot type into.
+        document.getElementById("token").onkeydown = (e) => {
+          if (e.key === "Enter") submit();
+        };
       }
 
       const tile = (label, value) => `<div class="tile"><b>${value}</b><span>${label}</span></div>`;
