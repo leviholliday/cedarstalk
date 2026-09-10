@@ -164,7 +164,12 @@ export interface ImportReport {
 
 /** Import whatever of the four is actually there. */
 export function importAll(paths: Partial<typeof SIBLINGS> = {}): ImportReport {
-  const where = { ...SIBLINGS, ...paths };
+  // Spreading would let an unset flag overwrite a default with undefined, and
+  // "skipped undefined" is a poor way to learn that.
+  const where = { ...SIBLINGS };
+  for (const [key, value] of Object.entries(paths)) {
+    if (value) where[key as keyof typeof SIBLINGS] = value;
+  }
   const report: ImportReport = { skipped: [] };
 
   if (existsSync(where.directory)) report.directory = importDirectory(where.directory);
