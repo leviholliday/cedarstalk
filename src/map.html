@@ -61,6 +61,7 @@
       svg { width: 100%; height: 100%; display: block; cursor: grab; }
       svg.dragging { cursor: grabbing; }
       .path { stroke: #322c26; stroke-width: 1.4; fill: none; stroke-linecap: round; }
+      .walked { stroke: #e0913f; fill: none; stroke-linecap: round; pointer-events: none; }
       .plot { fill: #221e19; stroke: #2b2621; stroke-width: 0.6; }
       .place { stroke: #14120f; stroke-width: 0.8; cursor: pointer; }
       .place:hover, .pin:hover { stroke: var(--ink); stroke-width: 1.6; }
@@ -117,6 +118,7 @@
         <button type="button" id="by-people" aria-pressed="true">people</button>
         <button type="button" id="by-gender" aria-pressed="false">gender</button>
         <button type="button" id="by-class" aria-pressed="false">class</button>
+        <button type="button" id="traffic" aria-pressed="false">traffic</button>
         <button type="button" id="paths" aria-pressed="true">paths</button>
         <a href="/">dashboard</a>
       </nav>
@@ -137,16 +139,41 @@
         return res.json();
       };
 
-      const CLASS_INK = { FR: "#5fafff", SO: "#63c8a0", JR: "#d7af5f", SR: "#ff87d7" };
-      const GENDER_INK = { male: "#5fafff", female: "#ff87d7", mixed: "#d7af5f" };
+      /**
+       * Six hues, checked rather than chosen: every adjacent pair clears the
+       * colour-blind separation floor against this background, and the legend
+       * carries the names so identity never rests on hue alone.
+       */
+      const CLASS_INK = {
+        FR: "#3987e5",
+        SO: "#199e70",
+        JR: "#c98500",
+        SR: "#d55181",
+        GR: "#9085e9",
+        GS: "#9085e9",
+        P1: "#d95926",
+        P2: "#d95926",
+        P3: "#d95926",
+        P4: "#d95926",
+      };
+      const CLASS_ORDER = ["FR", "SO", "JR", "SR", "GS", "P4"];
+      const GENDER_INK = { male: "#3987e5", female: "#d55181", mixed: "#c98500" };
+      const OTHER_INK = "#3a3129";
+      const TRAFFIC_INK = "#e0913f";
       const escape = (text) =>
         String(text ?? "").replace(/[<>&"]/g, (c) => `&#${c.charCodeAt(0)};`);
 
       let mode = "people";
       let showPaths = true;
+      let showTraffic = false;
       let campus;
       let places;
       let byLabel;
+      let traffic;
+      let classes = {};
+
+      /** The registrar writes "SO"; a reader wants "Sophomore". */
+      const className = (code) => classes[code] ?? code;
 
       /** People per building, warmest where the most live. */
       function peopleInk(count, most) {
@@ -159,11 +186,11 @@
 
       function inkOf(place) {
         const seat = byLabel.get(place.label);
-        if (mode === "gender") return GENDER_INK[place.gender] ?? "#241f1b";
+        if (mode === "gender") return GENDER_INK[place.gender] ?? OTHER_INK;
         if (mode === "class") {
           const counts = seat?.breakdown ?? {};
           const top = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
-          return (top && CLASS_INK[top[0]]) ?? "#3a3129";
+          return (top && CLASS_INK[top[0]]) ?? OTHER_INK;
         }
         return peopleInk(seat?.people ?? 0, most);
       }
@@ -199,6 +226,24 @@
             `<polygon class="plot" points="${building.ring.map((p) => p.join(",")).join(" ")}" />`,
           );
         }
+
+        // Under the buildings and over the network: the busiest bands are the
+        // point, so they are drawn last within their own layer, widest on top.
+        const walked = showTraffic && traffic
+          ? traffic.buckets
+              .map((bucket) => {
+                const d = bucket.edges
+                  .map(([a, b]) => {
+                    const from = campus.nodes[a];
+                    const to = campus.nodes[b];
+                    return `M${from[0]} ${from[1]}L${to[0]} ${to[1]}`;
+                  })
+                  .join("");
+                return `<path class="walked" d="${d}" stroke-width="${(1.2 + 7 * bucket.share).toFixed(2)}"
+                  stroke-opacity="${(0.18 + 0.62 * bucket.share).toFixed(2)}" />`;
+              })
+              .join("")
+          : "";
 
         const paths = showPaths
           ? campus.edges
@@ -261,8 +306,9 @@
         main.innerHTML = `
           <svg viewBox="${x0 - pad} ${y0 - pad} ${x1 - x0 + pad * 2} ${y1 - y0 + pad * 2}">
             <g id="camera">
-              ${shapes.join("")}
               <path class="path" d="${paths}" />
+              ${walked}
+              ${shapes.join("")}
               ${names}
             </g>
           </svg>
@@ -277,19 +323,25 @@
         const swatch = (ink, text) =>
           `<span><i class="swatch" style="background:${ink}"></i>${text}</span>`;
         const node = document.getElementById("legend");
+        const walked = showTraffic
+          ? `<span style="border-left:1px solid var(--line);padding-left:0.75rem">
+               <i class="swatch" style="background:${TRAFFIC_INK}"></i>busiest path
+               ${traffic ? `${traffic.busiest.toLocaleString("en-US")} walks` : ""}</span>`
+          : "";
+
         if (mode === "gender") {
-          node.innerHTML = Object.entries(GENDER_INK)
-            .map(([name, ink]) => swatch(ink, name))
-            .join("");
+          node.innerHTML =
+            Object.entries(GENDER_INK)
+              .map(([name, ink]) => swatch(ink, name))
+              .join("") + walked;
         } else if (mode === "class") {
-          node.innerHTML = Object.entries(CLASS_INK)
-            .map(([name, ink]) => swatch(ink, name))
-            .join("");
+          node.innerHTML =
+            CLASS_ORDER.map((code) => swatch(CLASS_INK[code], className(code))).join("") + walked;
         } else {
           node.innerHTML = `${swatch(peopleInk(1, most), "1")} ${swatch(
             peopleInk(most / 4, most),
             Math.round(most / 4),
-          )} ${swatch(peopleInk(most, most), most)} <span>people listed there</span>`;
+          )} ${swatch(peopleInk(most, most), most)} <span>people listed there</span>${walked}`;
         }
       }
 
@@ -328,7 +380,10 @@
         }
         const rows = [...breakdown.entries()]
           .sort((a, b) => b[1] - a[1])
-          .map(([name, n]) => `<tr><td>${escape(name)}</td><td class="n">${n}</td></tr>`)
+          .map(
+            ([name, n]) =>
+              `<tr><td>${escape(shown.length > 1 ? name : className(name))}</td><td class="n">${n}</td></tr>`,
+          )
           .join("");
 
         document.getElementById("card").innerHTML = `
@@ -411,6 +466,18 @@
           draw();
         });
       }
+      button("traffic", async (node) => {
+        showTraffic = !showTraffic;
+        node.setAttribute("aria-pressed", String(showTraffic));
+        // Fetched once, when first asked for: it is a few thousand journeys
+        // routed server-side and nobody who never presses it should pay.
+        if (showTraffic && !traffic) {
+          node.textContent = "routing…";
+          traffic = await api("/v1/campus/traffic");
+          node.textContent = "traffic";
+        }
+        draw();
+      });
       button("paths", (node) => {
         showPaths = !showPaths;
         node.setAttribute("aria-pressed", String(showPaths));
@@ -418,11 +485,13 @@
       });
 
       try {
-        const [map, buildings, seats] = await Promise.all([
+        const [map, buildings, seats, glossary] = await Promise.all([
           api("/v1/campus/map?graph=1"),
           api("/v1/campus/buildings"),
-          api(`/v1/campus/occupancy?by=class`),
+          api("/v1/campus/occupancy?by=class"),
+          api("/v1/glossary"),
         ]);
+        classes = glossary.classes;
         campus = map;
         places = buildings.buildings;
         byLabel = new Map(seats.buildings.map((row) => [row.label, row]));

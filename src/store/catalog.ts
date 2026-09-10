@@ -227,6 +227,34 @@ export function courseByCode(code: string, term?: string): CourseRow | null {
     .get(ALL_COURSES, upper);
 }
 
+/**
+ * Every building the timetable actually teaches in.
+ *
+ * The directory only names buildings somebody lives or works in, which misses
+ * the ones that are all classrooms — Alford Auditorium has a hundred seats and
+ * nobody's office. A campus that cannot place a lecture hall cannot answer
+ * where anybody walks.
+ */
+export function meetingBuildings(term?: string): string[] {
+  const rows = term
+    ? db()
+        .query<{ payload: string }, [string]>("SELECT payload FROM sections WHERE term = ?")
+        .all(term)
+    : db().query<{ payload: string }, []>("SELECT payload FROM sections").all();
+
+  const names = new Set<string>();
+  for (const row of rows) {
+    const section = JSON.parse(row.payload) as {
+      FormattedMeetingTimes?: { BuildingDisplay?: string; IsOnline?: boolean }[];
+    };
+    for (const meeting of section.FormattedMeetingTimes ?? []) {
+      const building = meeting.BuildingDisplay?.trim();
+      if (building && !meeting.IsOnline) names.add(building);
+    }
+  }
+  return [...names].sort();
+}
+
 export interface TermStats {
   term: string;
   sections: number;

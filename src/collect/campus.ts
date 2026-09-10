@@ -15,6 +15,7 @@
 
 import { db } from "../db";
 import { type CampusMap, replaceCampus } from "../store/campus";
+import { meetingBuildings } from "../store/catalog";
 import { finishSweep, startSweep } from "../store/history";
 import buildingsTsv from "./assets/buildings.tsv" with { type: "text" };
 import dormGenderTsv from "./assets/dorm-gender.tsv" with { type: "text" };
@@ -473,6 +474,12 @@ export async function collectCampus(): Promise<{
 
   // Everything the curated map knows about, plus every building the directory
   // actually puts somebody in.
+  // Classrooms count too: a building nobody is listed against is still a place
+  // five hundred people walk to on a Tuesday.
+  for (const label of meetingBuildings()) {
+    if (!kinds.has(label)) kinds.set(label, "class");
+  }
+
   const genders = dormGender();
   const labels = [...new Set([...curated.keys(), ...kinds.keys()])].map((label) => ({
     label,

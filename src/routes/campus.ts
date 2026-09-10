@@ -3,8 +3,11 @@
  * person: who lives where, and how far apart any two people are on foot.
  */
 
+import { CLASS_LABELS, TYPE_LABELS } from "../lib/classes";
 import { badRequest, json, notFound, q } from "../lib/http";
 import { adjacencyOf, shortestPath } from "../lib/route";
+import { currentTerm } from "../lib/terms";
+import { campusTraffic } from "../model/traffic";
 import { buildingByLabel, buildings, campusMap, locate, occupancy } from "../store/campus";
 import type { RouteDef } from "./types";
 
@@ -67,6 +70,25 @@ export const campusRoutes: RouteDef[] = [
       }
       return json({ by, buildings: occupancy(by) });
     },
+  },
+  {
+    method: "GET",
+    path: "/v1/campus/traffic",
+    tag: "campus",
+    summary:
+      "How many people walk each footpath, from dorms to the buildings their courses meet in",
+    query: [{ name: "term", description: "Term code. Defaults to the current one." }],
+    handler: (_request, url) => {
+      requireMap();
+      return json(campusTraffic(q(url, "term") ?? currentTerm()));
+    },
+  },
+  {
+    method: "GET",
+    path: "/v1/glossary",
+    tag: "campus",
+    summary: "What the directory's class and population codes mean",
+    handler: () => json({ classes: CLASS_LABELS, types: TYPE_LABELS }),
   },
   {
     method: "GET",
