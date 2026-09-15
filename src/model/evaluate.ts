@@ -26,8 +26,30 @@ export interface Evaluation {
   misses: { studentId: string; known: string; guessed: string }[];
 }
 
-const same = (a: string, b: string) =>
-  a.toLowerCase().replace(/[^a-z]/g, "") === b.toLowerCase().replace(/[^a-z]/g, "");
+const flatten = (s: string) => s.toLowerCase().replace(/[^a-z]/g, "");
+
+/**
+ * A label and a program title naming the same thing.
+ *
+ * Labels arrive the way a person says them and the catalog prints them the way
+ * the registrar files them, so "Biology" has to meet "Biology — BS". The book
+ * splits a major across degree tracks a booklist cannot tell apart, and a
+ * roster never records which one; scored strictly, twenty of a hundred labels
+ * could not have matched anything on the page. So the degree suffix comes off
+ * before comparing, and a label that is a prefix of a title counts, which is
+ * how "Language Arts Education" reaches "Language Arts Education Integrated".
+ */
+const DEGREE = /\s*[—-]\s*(BA|BS|BSN|BME|BMU|BFA|BSBA)\s*$/i;
+
+const same = (a: string, b: string) => {
+  if (flatten(a) === flatten(b)) return true;
+  const left = flatten(a.replace(DEGREE, ""));
+  const right = flatten(b.replace(DEGREE, ""));
+  if (left === right) return true;
+  // Short stems match too much: "art" would swallow every title starting in it.
+  if (left.length < 5 || right.length < 5) return false;
+  return left.startsWith(right) || right.startsWith(left);
+};
 
 export function evaluate({
   source,

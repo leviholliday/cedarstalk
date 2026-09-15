@@ -15,6 +15,31 @@ export interface Ranked extends Guess {
   school: string | null;
 }
 
+/**
+ * The coarse half of the answer, and the half a thin booklist can carry.
+ *
+ * Four courses name a school far better than they name a program. Scored
+ * against the labelled set, a top five that unanimously agrees on one school
+ * has it right about nine times in ten, while the program at the head of that
+ * same list is right about one time in five: the ranking knows the
+ * neighbourhood and is guessing at the house. A scattered top five is right
+ * about the school two thirds of the time.
+ *
+ * So agreement is reported rather than folded into the ordering, and the only
+ * threshold drawn is the one the labels actually separate — unanimity. The
+ * bands below it score alike, and inventing a "medium" would be dressing noise
+ * up as a measurement.
+ */
+export interface SchoolCall {
+  /** The school of the top guess, from the registrar's taxonomy where it has one. */
+  name: string | null;
+  /** How many of the top five share that school. */
+  agreement: number;
+  /** Out of how many, which is five unless the model returned fewer. */
+  of: number;
+  unanimous: boolean;
+}
+
 export interface StudentGuess {
   studentId: string;
   name: string | null;
@@ -22,7 +47,22 @@ export interface StudentGuess {
   terms: string[];
   courses: string[];
   signal: number;
+  school: SchoolCall;
   guesses: Ranked[];
+}
+
+/** How far the top of the ranking is looked at when calling a school. */
+const PANEL = 5;
+
+function callSchool(ranked: Guess[]): SchoolCall {
+  const panel = ranked.slice(0, PANEL);
+  const top = panel[0];
+  // clusterOf already prefers the registrar's school and falls back to its own
+  // patterns, so it is the one place that decides what bucket a title is in.
+  const name = top ? clusterOf(top.title) : "";
+  if (!name) return { name: null, agreement: 0, of: panel.length, unanimous: false };
+  const agreement = panel.filter((g) => clusterOf(g.title) === name).length;
+  return { name, agreement, of: panel.length, unanimous: agreement === panel.length };
 }
 
 const withSchool = (guesses: Guess[]): Ranked[] =>
@@ -43,6 +83,7 @@ export function guessFor(studentId: string, top = 3, year?: string): StudentGues
     terms: fingerprint.terms,
     courses: fingerprint.courses,
     signal,
+    school: callSchool(ranked),
     guesses: withSchool(ranked.slice(0, top)),
   };
 }
@@ -61,6 +102,7 @@ export function guessAll(top = 3, year?: string): StudentGuess[] {
       terms: fingerprint.terms,
       courses: fingerprint.courses,
       signal,
+      school: callSchool(ranked),
       guesses: withSchool(ranked.slice(0, top)),
     });
   }
