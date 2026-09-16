@@ -2,6 +2,7 @@
 
 import { bool, json, notFound, num, q } from "../lib/http";
 import { guessFor } from "../model/guess";
+import { scheduleFor } from "../model/schedule";
 import { locate } from "../store/campus";
 import { booklistTimeline, personTimeline } from "../store/history";
 import { peopleStats, personById, searchPeople } from "../store/people";
@@ -61,6 +62,23 @@ export const peopleRoutes: RouteDef[] = [
       const guess = guessFor(request.params.id ?? "", num(url, "top") ?? 3, q(url, "year"));
       if (!guess) throw notFound("no booklist data for that person");
       return json(guess);
+    },
+  },
+  {
+    method: "GET",
+    path: "/v1/people/:id/schedule",
+    tag: "people",
+    summary: "A student's week: the sections their booklist names, with times and rooms",
+    query: [
+      {
+        name: "term",
+        description: "Term code. Defaults to the current one, then the newest held.",
+      },
+    ],
+    handler: (request, url) => {
+      const schedule = scheduleFor(request.params.id ?? "", q(url, "term"));
+      if (!schedule) throw notFound("no booklist data for that person");
+      return json(schedule);
     },
   },
   {

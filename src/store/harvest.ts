@@ -39,6 +39,58 @@ export function codesFromBooks(books: Book[] | undefined): string[] {
   return [...codes].sort();
 }
 
+/**
+ * The same books, read one level finer.
+ *
+ * `codesFromBooks` drops the section on purpose: the major model wants a course
+ * fingerprint, and which lab slot somebody drew says nothing about what they
+ * study. A timetable is the one question where it says everything, so it is
+ * parsed here rather than smuggled into the fingerprint.
+ *
+ * "BIO-Biology / 2500-General Botany / 01-01" collapses to "BIO-2500-01".
+ */
+export function sectionsFromBooks(books: Book[] | undefined): string[] {
+  const names = new Set<string>();
+  if (!Array.isArray(books)) return [];
+  for (const book of books) {
+    const subject = String(book.department ?? "")
+      .split("-")[0]
+      ?.trim();
+    const number = String(book.course ?? "")
+      .split("-")[0]
+      ?.trim();
+    const section = String(book.section ?? "")
+      .split("-")[0]
+      ?.trim();
+    if (!subject || !number || !section) continue;
+    names.add(`${subject}-${number}-${section}`.toUpperCase());
+  }
+  return [...names].sort();
+}
+
+export interface Enrolment {
+  term: string;
+  /** Section names as the catalog writes them, e.g. "BIO-2500-01". */
+  sections: string[];
+  fetchedAt: string;
+}
+
+/** What one student's booklists say they are sitting in, oldest term first. */
+export function enrolmentOf(studentId: string, term?: string): Enrolment[] {
+  const where = term ? "student_id = ? AND term = ?" : "student_id = ?";
+  const args = term ? [studentId, term] : [studentId];
+  return db()
+    .query<{ term: string; books: string; fetchedAt: string }, string[]>(
+      `SELECT term, books, fetched_at AS fetchedAt FROM booklists WHERE ${where} ORDER BY term`,
+    )
+    .all(...args)
+    .map((row) => ({
+      term: row.term,
+      sections: sectionsFromBooks(JSON.parse(row.books) as Book[]),
+      fetchedAt: row.fetchedAt,
+    }));
+}
+
 export interface IngestTally {
   students: number;
   withBooks: number;

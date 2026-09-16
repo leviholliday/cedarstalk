@@ -209,6 +209,24 @@ export function searchCourses(query: CourseQuery): CourseRow[] {
 }
 
 /**
+ * Sections by the name the catalog prints on them, e.g. "BIO-2500-01".
+ *
+ * One query for a whole schedule rather than one per course, and the names
+ * that matched nothing come back to the caller rather than vanishing: a
+ * section in a booklist and not in the catalog is worth saying out loud.
+ */
+export function sectionsByName(term: string, names: string[]): SectionRow[] {
+  const wanted = [...new Set(names.map((name) => name.toUpperCase()))];
+  if (!wanted.length) return [];
+  const holes = wanted.map(() => "?").join(", ");
+  return db()
+    .query<SectionRow, string[]>(
+      `${SECTION_SELECT} WHERE term = ? AND UPPER(name) IN (${holes}) ORDER BY name`,
+    )
+    .all(term, ...wanted);
+}
+
+/**
  * One course by code, preferring the term asked for and falling back to the
  * full-catalog copy. A requisite often names a course nobody is teaching this
  * year, and answering "no such course" for EGEE-2010 would be a lie.

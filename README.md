@@ -102,6 +102,26 @@ classifier (~75%) and a weak fine-grained one (~25% exact): it cannot split
 MechE from CompE when they share the freshman core. More semesters is the fix,
 and `evaluate` logs every run so the climb is visible.
 
+## Schedules
+
+The major model throws the section number away, because which lab slot somebody
+drew says nothing about what they study. For one question it says everything:
+`BIO-2500-01` is a row in the catalog, and that row carries the days, the hour
+and the room. So a list of books nobody meant to publish as a timetable is a
+timetable.
+
+```
+GET /v1/people/:id/schedule?term=2026FA
+```
+
+Sections with times and rooms, a Monday-to-Friday week with contact minutes per
+day, credits summed off the catalog, online sections held apart from the ones
+that meet, and the sections a booklist named that the catalog has never heard
+of. It is only as current as the last harvest — a course dropped in week three
+sits there until a sweep sees it gone, and `/v1/people/:id/history` is where
+that movement is written down. A section nobody assigned a book to never shows
+up at all.
+
 ## The map
 
 `collect campus` pulls building outlines and every footpath, stair and service
