@@ -5,3 +5,7 @@ data/
 .env
 .DS_Store
 *.bun-build
+
+# Headless harvester: a browser profile and raw harvest dumps
+data/chrome-profile/
+data/harvests/

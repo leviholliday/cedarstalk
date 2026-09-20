@@ -57,6 +57,22 @@
       }
       button[aria-pressed="true"] { background: var(--pink); color: #14120f; border-color: var(--pink); }
       a { color: var(--blue); font-size: 11px; }
+      .scrubber { display: flex; align-items: center; gap: 0.4rem; }
+      .scrubber select {
+        background: transparent;
+        border: 1px solid var(--line);
+        color: var(--dim);
+        font: inherit;
+        font-size: 11px;
+        padding: 0.2rem 0.3rem;
+      }
+      .scrubber input[type="range"] { width: 140px; accent-color: var(--pink); }
+      .scrubber span#scrub-label {
+        color: var(--ink);
+        font-size: 11px;
+        min-width: 3.2em;
+        font-variant-numeric: tabular-nums;
+      }
       main { flex: 1; position: relative; overflow: hidden; }
       svg { width: 100%; height: 100%; display: block; cursor: grab; }
       svg.dragging { cursor: grabbing; }
@@ -125,6 +141,19 @@
         <button type="button" id="by-gender" aria-pressed="false">gender</button>
         <button type="button" id="by-class" aria-pressed="false">class</button>
         <button type="button" id="traffic" aria-pressed="false">traffic</button>
+        <span id="scrubber" class="scrubber" hidden>
+          <select id="scrub-day">
+            <option value="1">Mon</option>
+            <option value="2">Tue</option>
+            <option value="3">Wed</option>
+            <option value="4">Thu</option>
+            <option value="5">Fri</option>
+          </select>
+          <input id="scrub-time" type="range" min="360" max="1320" step="10" value="590" />
+          <span id="scrub-label">9:50</span>
+          <button type="button" id="scrub-whole" aria-pressed="true">whole term</button>
+          <button type="button" id="play" aria-pressed="false" hidden>play</button>
+        </span>
         <button type="button" id="paths" aria-pressed="true">paths</button>
         <a href="/">dashboard</a>
       </nav>
@@ -175,8 +204,19 @@
       let campus;
       let places;
       let byLabel;
+      let byPlaceLabel;
       let traffic;
       let classes = {};
+
+      // The time-lapse: one day's traffic frames, one day's headcount curve,
+      // and where the slider currently sits in it.
+      let scrubbing = false;
+      let scrubDay = 1;
+      let scrubMinute = 590;
+      let dayTraffic = null;
+      let dayCurve = null;
+      let peakHeadcount = 1;
+      let playTimer = null;
 
       /** The registrar writes "SO"; a reader wants "Sophomore". */
       const className = (code) => classes[code] ?? code;
@@ -190,8 +230,20 @@
         return `rgb(${from.map((c, i) => Math.round(c + (to[i] - c) * t)).join(",")})`;
       }
 
-      function inkOf(place) {
+      /** Class headcount in a building right now, on a colder ramp than "who lives here". */
+      function liveInk(count) {
+        if (!count) return "#241f1b";
+        const t = Math.sqrt(count / peakHeadcount);
+        const from = [36, 31, 27];
+        const to = [224, 145, 63]; // the same amber the walked paths use
+        return `rgb(${from.map((c, i) => Math.round(c + (to[i] - c) * t)).join(",")})`;
+      }
+
+      function inkOf(place, live = null) {
         const seat = byLabel.get(place.label);
+        // Mid-scrub the question changes: not who is listed against this
+        // building, but who is scheduled inside it at this minute.
+        if (live) return liveInk(live.get(place.label) ?? 0);
         if (mode === "gender") return GENDER_INK[place.gender] ?? OTHER_INK;
         if (mode === "class") {
           // Residents only. A lecture hall where fifteen graduate staff have
@@ -222,10 +274,35 @@
         return [at(xs, 0.05), at(ys, 0.05), at(xs, 0.95), at(ys, 0.95)];
       }
 
+      /**
+       * The traffic bands, as their own layer.
+       *
+       * Split out of `draw` so a time-lapse frame can replace just this and
+       * the building fills, rather than re-serialising four thousand path
+       * nodes ten times a second — and, more to the point, rather than
+       * rebuilding the SVG out from under whatever the viewer had zoomed in on.
+       */
+      function walkedLayer() {
+        const shown = scrubbing ? frameAt(scrubMinute) : traffic;
+        if (!showTraffic || !shown) return "";
+        return shown.buckets
+          .map((bucket) => {
+            const d = bucket.paths
+              .map((run) =>
+                run.map((node, i) => `${i ? "L" : "M"}${campus.nodes[node].join(" ")}`).join(""),
+              )
+              .join("");
+            return `<path class="walked" d="${d}" stroke-width="${(1.2 + 7 * bucket.share).toFixed(2)}"
+              stroke-opacity="${(0.16 + 0.6 * bucket.share).toFixed(2)}" />`;
+          })
+          .join("");
+      }
+
       function draw() {
         const [x0, y0, x1, y1] = frame();
         const pad = 120;
         const shapes = [];
+        const live = scrubbing ? liveAt(scrubMinute) : null;
 
         // Everything OSM drew, as context: the campus is more legible with the
         // buildings nobody in the directory lives in still faintly present.
@@ -236,23 +313,7 @@
           );
         }
 
-        // Under the buildings and over the network: the busiest bands are the
-        // point, so they are drawn last within their own layer, widest on top.
-        const walked = showTraffic && traffic
-          ? traffic.buckets
-              .map((bucket) => {
-                const d = bucket.paths
-                  .map((run) =>
-                    run
-                      .map((node, i) => `${i ? "L" : "M"}${campus.nodes[node].join(" ")}`)
-                      .join(""),
-                  )
-                  .join("");
-                return `<path class="walked" d="${d}" stroke-width="${(1.2 + 7 * bucket.share).toFixed(2)}"
-                  stroke-opacity="${(0.16 + 0.6 * bucket.share).toFixed(2)}" />`;
-              })
-              .join("")
-          : "";
+        const walked = walkedLayer();
 
         const paths = showPaths
           ? campus.edges
@@ -277,7 +338,7 @@
           if (place.ring.length > 2) {
             const title = `${place.label} — ${people} ${people === 1 ? "person" : "people"}`;
             shapes.push(
-              `<polygon class="place" data-label="${escape(place.label)}" fill="${inkOf(place)}"
+              `<polygon class="place" data-label="${escape(place.label)}" fill="${inkOf(place, live)}"
                 points="${place.ring.map((p) => p.join(",")).join(" ")}"><title>${escape(title)}</title></polygon>`,
             );
             labelled.push([place.x, place.y, place.label, people]);
@@ -302,7 +363,7 @@
           shapes.push(
             `<circle class="pin" data-label="${escape(names.join("|"))}"
               cx="${spot.x}" cy="${spot.y}" r="${6 + Math.sqrt(spot.people)}"
-              fill="${inkOf(spot.places[0])}"><title>${escape(title)}</title></circle>`,
+              fill="${inkOf(spot.places[0], live)}"><title>${escape(title)}</title></circle>`,
           );
           labelled.push([spot.x, spot.y, shared, spot.people]);
         }
@@ -316,7 +377,7 @@
           <svg viewBox="${x0 - pad} ${y0 - pad} ${x1 - x0 + pad * 2} ${y1 - y0 + pad * 2}">
             <g id="camera">
               <path class="path" d="${paths}" />
-              ${walked}
+              <g id="walked">${walked}</g>
               ${shapes.join("")}
               ${names}
             </g>
@@ -332,11 +393,30 @@
         const swatch = (ink, text) =>
           `<span><i class="swatch" style="background:${ink}"></i>${text}</span>`;
         const node = document.getElementById("legend");
+        const shown = scrubbing ? frameAt(scrubMinute) : traffic;
+        const trafficNote = !shown
+          ? ""
+          : scrubbing
+            ? `${(shown.estimated ?? 0).toLocaleString("en-US")} est. in transit ` +
+              `(${(shown.observed ?? 0).toLocaleString("en-US")} observed)`
+            : `${shown.busiest.toLocaleString("en-US")} walks on the busiest path`;
         const walked = showTraffic
           ? `<span style="border-left:1px solid var(--line);padding-left:0.75rem">
-               <i class="swatch" style="background:${TRAFFIC_INK}"></i>busiest path
-               ${traffic ? `${traffic.busiest.toLocaleString("en-US")} walks` : ""}</span>`
+               <i class="swatch" style="background:${TRAFFIC_INK}"></i>${trafficNote || "nobody walking"}</span>`
           : "";
+
+        // Mid-scrub the buildings mean something else entirely, so the key has to say so.
+        if (scrubbing) {
+          const live = liveAt(scrubMinute);
+          const seated = live ? [...live.values()].reduce((sum, v) => sum + v, 0) : 0;
+          node.innerHTML =
+            `${swatch(liveInk(peakHeadcount * 0.08), "few")} ` +
+            `${swatch(liveInk(peakHeadcount * 0.4), "")} ` +
+            `${swatch(liveInk(peakHeadcount), peakHeadcount.toLocaleString("en-US"))} ` +
+            `<span>in class at ${clockLabel(scrubMinute)} · ${seated.toLocaleString("en-US")} seated now</span>` +
+            walked;
+          return;
+        }
 
         if (mode === "gender") {
           node.innerHTML =
@@ -373,7 +453,34 @@
         return prefix.length >= 2 ? `${prefix} ×${names.length}` : `${names.length} places`;
       }
 
+      let lastCardLabel = null;
+      const profileCache = new Map();
+
+      /** Peak hour, dominant subject, utilization -- fetched once per building, lazily. */
+      async function loadProfile(labels, primary) {
+        if (!profileCache.has(primary)) {
+          try {
+            profileCache.set(primary, await api(`/v1/buildings/${encodeURIComponent(primary)}/profile`));
+          } catch {
+            profileCache.set(primary, null);
+          }
+        }
+        if (lastCardLabel !== labels) return; // moved on before this landed
+        const node = document.getElementById("profile");
+        if (!node) return;
+        const profile = profileCache.get(primary);
+        node.innerHTML = profile
+          ? `<p>peak ${profile.peakHour !== null ? clockLabel(profile.peakHour * 60) : "?"} ·
+              ${escape(profile.dominantSubject ?? "no dominant subject")}
+              ${profile.subjectShare !== null ? `(${Math.round(profile.subjectShare * 100)}%)` : ""} ·
+              ${profile.meanUtilization !== null ? `${Math.round(profile.meanUtilization * 100)}% booked` : ""}</p>`
+          : `<p>no classes meet here</p>`;
+      }
+
       function card(labels) {
+        if (labels === lastCardLabel) return;
+        lastCardLabel = labels;
+
         const chosen = labels.split("|");
         const shown = places.filter((p) => chosen.includes(p.label));
         const first = shown[0];
@@ -416,20 +523,27 @@
               .filter(Boolean)
               .join(" · ")
           } · ${first.lat.toFixed(5)}, ${first.lon.toFixed(5)}</p>
-          ${rows ? `<table>${rows}</table>` : ""}`;
+          ${rows ? `<table>${rows}</table>` : ""}
+          <div id="profile" style="color: var(--dim); margin-top: 0.35rem">loading class data…</div>`;
+
+        loadProfile(labels, shown[0].label);
       }
+
+      // Kept across redraws: toggling a mode or stepping a time-lapse frame
+      // should not throw away wherever the viewer had zoomed to.
+      let scale = 1;
+      let panX = 0;
+      let panY = 0;
 
       /** Pan and zoom, kept in the SVG's own units so nothing has to re-render. */
       function wire() {
         const svg = main.querySelector("svg");
         const camera = main.querySelector("#camera");
-        let scale = 1;
-        let panX = 0;
-        let panY = 0;
         let dragging = null;
 
         const apply = () =>
           camera.setAttribute("transform", `translate(${panX} ${panY}) scale(${scale})`);
+        apply();
 
         svg.addEventListener("wheel", (event) => {
           event.preventDefault();
@@ -491,17 +605,135 @@
           draw();
         });
       }
-      button("traffic", async (node) => {
-        showTraffic = !showTraffic;
-        node.setAttribute("aria-pressed", String(showTraffic));
-        // Fetched once, when first asked for: it is a few thousand journeys
-        // routed server-side and nobody who never presses it should pay.
-        if (showTraffic && !traffic) {
+      const scrubberEl = document.getElementById("scrubber");
+      const scrubTimeEl = document.getElementById("scrub-time");
+      const scrubLabelEl = document.getElementById("scrub-label");
+      const scrubDayEl = document.getElementById("scrub-day");
+      const playEl = document.getElementById("play");
+
+      const clockLabel = (minute) => {
+        const h = Math.floor(minute / 60);
+        const m = minute % 60;
+        const h12 = h % 12 || 12;
+        return `${h12}:${String(m).padStart(2, "0")}${h < 12 ? "am" : "pm"}`;
+      };
+
+      /**
+       * A whole day, fetched once.
+       *
+       * Both halves of the time-lapse come down in two requests — every
+       * traffic frame, and every building's headcount curve — so scrubbing
+       * and playback never touch the network again. Per-frame requests would
+       * mean a spinner between every tick of the clock.
+       */
+      async function loadDay(node) {
+        const had = node.textContent;
+        node.textContent = "routing…";
+        const [frames, curve] = await Promise.all([
+          api(`/v1/campus/traffic/day?day=${scrubDay}`),
+          api(`/v1/campus/occupancy/curve?day=${scrubDay}`),
+        ]);
+        dayTraffic = frames;
+        dayCurve = new Map();
+        for (const point of curve.points) {
+          const at = dayCurve.get(point.minute) ?? new Map();
+          at.set(point.building, point.enrolled);
+          dayCurve.set(point.minute, at);
+        }
+        peakHeadcount = Math.max(1, ...curve.points.map((p) => p.enrolled));
+        node.textContent = had === "routing…" ? "traffic" : had;
+      }
+
+      /** The frame covering a scrubbed minute — frames are bucketed, the slider is not. */
+      function frameAt(minute) {
+        if (!dayTraffic?.frames.length) return null;
+        const width = dayTraffic.bucketMinutes;
+        const snapped = Math.floor(minute / width) * width;
+        return dayTraffic.frames.find((f) => f.minute === snapped) ?? null;
+      }
+
+      /** Live class headcount per building at the scrubbed minute. */
+      function liveAt(minute) {
+        if (!dayCurve) return null;
+        const width = dayTraffic?.bucketMinutes ?? 10;
+        return dayCurve.get(Math.floor(minute / width) * width) ?? new Map();
+      }
+
+      /**
+       * Repaint only what a new frame changes: the traffic bands, and the
+       * fill on each building. The graph underneath, the labels and the
+       * camera all stay exactly as they were.
+       */
+      function repaint() {
+        const walkedNode = document.getElementById("walked");
+        if (walkedNode) walkedNode.innerHTML = walkedLayer();
+
+        const live = scrubbing ? liveAt(scrubMinute) : null;
+        for (const node of main.querySelectorAll("[data-label]")) {
+          const first = node.dataset.label.split("|")[0];
+          const place = byPlaceLabel.get(first);
+          if (place) node.setAttribute("fill", inkOf(place, live));
+        }
+        legend();
+      }
+
+      async function refresh(node) {
+        if (scrubbing && (!dayTraffic || dayTraffic.day !== scrubDay)) await loadDay(node);
+        if (!scrubbing && !traffic) {
           node.textContent = "routing…";
           traffic = await api("/v1/campus/traffic");
           node.textContent = "traffic";
         }
-        draw();
+        repaint();
+      }
+
+      button("traffic", async (node) => {
+        showTraffic = !showTraffic;
+        node.setAttribute("aria-pressed", String(showTraffic));
+        scrubberEl.hidden = !showTraffic;
+        await refresh(node);
+      });
+      button("scrub-whole", async (node) => {
+        scrubbing = !scrubbing;
+        node.setAttribute("aria-pressed", String(!scrubbing));
+        node.textContent = scrubbing ? "one day" : "whole term";
+        if (!scrubbing) stopPlaying();
+        playEl.hidden = !scrubbing;
+        await refresh(document.getElementById("traffic"));
+      });
+      scrubDayEl.addEventListener("change", async () => {
+        scrubDay = Number(scrubDayEl.value);
+        if (scrubbing) await refresh(document.getElementById("traffic"));
+      });
+      scrubTimeEl.addEventListener("input", () => {
+        scrubMinute = Number(scrubTimeEl.value);
+        scrubLabelEl.textContent = clockLabel(scrubMinute);
+        if (scrubbing) repaint();
+      });
+
+      /** Playback: step the slider through the day, repainting in place. */
+      function stopPlaying() {
+        if (playTimer) clearInterval(playTimer);
+        playTimer = null;
+        playEl.setAttribute("aria-pressed", "false");
+        playEl.textContent = "play";
+      }
+
+      button("play", () => {
+        if (playTimer) {
+          stopPlaying();
+          return;
+        }
+        playEl.setAttribute("aria-pressed", "true");
+        playEl.textContent = "pause";
+        const step = dayTraffic?.bucketMinutes ?? 10;
+        playTimer = setInterval(() => {
+          scrubMinute += step;
+          if (scrubMinute > Number(scrubTimeEl.max)) scrubMinute = Number(scrubTimeEl.min);
+          scrubTimeEl.value = String(scrubMinute);
+          scrubLabelEl.textContent = clockLabel(scrubMinute);
+          repaint();
+        }, 220);
       });
       button("paths", (node) => {
         showPaths = !showPaths;
@@ -520,6 +752,7 @@
         campus = map;
         places = buildings.buildings;
         byLabel = new Map(seats.buildings.map((row) => [row.label, row]));
+        byPlaceLabel = new Map(places.map((place) => [place.label, place]));
         most = Math.max(1, ...seats.buildings.map((row) => row.people));
 
         const total = seats.buildings.reduce((sum, row) => sum + row.people, 0);

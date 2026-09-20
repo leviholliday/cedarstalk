@@ -150,6 +150,12 @@
       const escape = (text) =>
         String(text ?? "").replace(/[<>&"]/g, (c) => `&#${c.charCodeAt(0)};`);
 
+      // Set once glossary lands, read by any view function that needs to turn
+      // a registrar code into a word — module-scoped so it isn't re-threaded
+      // through every view function's arguments.
+      let classes = {};
+      const className = (code) => classes[code] ?? code;
+
       const api = async (path) => {
         const res = await fetch(path, {
           headers: { authorization: `Bearer ${localStorage.getItem(KEY) ?? ""}` },
@@ -358,6 +364,207 @@
           { ink: "var(--violet)", unit: " students" },
         )}`;
 
+      const roomsView = (data) => {
+        if (!data.rooms.length) return `<p class="note">nothing free within the horizon right now</p>`;
+        const rows = data.rooms.slice(0, 8);
+        return `<div class="wrap"><table>
+          <tr><th>room</th><th class="n">quiet</th><th class="n">free for</th></tr>
+          ${rows
+            .map(
+              (r) => `<tr>
+                <td>${escape(r.building)} ${escape(r.room)}${r.gem ? " ·" : ""}</td>
+                <td class="n">${r.quiet}</td>
+                <td class="n">${r.freeMinutes >= 60 ? `${Math.round(r.freeMinutes / 60)}h` : `${n(r.freeMinutes)}m`}</td>
+              </tr>`,
+            )
+            .join("")}
+        </table></div>`;
+      };
+
+      const facultyView = (data) => `
+        <p class="note">sections taught this term, by instructor of record</p>
+        ${bars(
+          data.faculty.slice(0, 10).map((f) => ({ label: f.faculty, value: f.sections })),
+          { ink: "var(--blue)", unit: " sections" },
+        )}`;
+
+      const geographyView = (data) => `
+        <p class="note">${n(data.scored)} students with a routable schedule ·
+          mean metres walked per week, by class</p>
+        ${bars(
+          data.byBucket.map((b) => ({ label: className(b.bucket), value: b.meanWeeklyMetres })),
+          { ink: "var(--orange)", unit: "m/week" },
+        )}`;
+
+      const pressureView = (data) => {
+        const filling = data.sections.filter((s) => s.fillPerHour > 0).slice(0, 8);
+        if (!filling.length) {
+          return `<p class="note">no section is losing seats between the last two collects —
+            ${n(data.sections.length)} tracked, all steady right now</p>`;
+        }
+        return bars(
+          filling.map((s) => ({ label: s.name ?? s.sectionId, value: s.fillPerHour })),
+          { ink: "var(--pink)", unit: " seats/hr" },
+        );
+      };
+
+      const miles = (v) => `${Math.round(v ?? 0).toLocaleString("en-US")} mi`;
+
+      const curiositiesView = (data) => {
+        const d = data.distance;
+        const early = data.earlyBirds
+          .filter((e) => e.meetings >= 4)
+          .slice(0, 8)
+          .map((e) => ({ label: e.subject, value: Math.round(e.share * 100) }));
+        return `
+          <div class="tiles" style="margin-top:0">
+            ${tile("median from campus", d.medianMiles === null ? "—" : miles(d.medianMiles))}
+            ${tile("mean from campus", d.meanMiles === null ? "—" : miles(d.meanMiles))}
+            ${tile(
+              d.furthest
+                ? `furthest · ${escape(d.furthest.city)}, ${escape(d.furthest.state)}`
+                : "furthest",
+              d.furthest ? miles(d.furthest.miles) : "—",
+            )}
+            ${tile(
+              `hometowns placed · ${n(d.geocoded)} of ${n(d.ofPeople)}`,
+              d.ofPeople ? pct(d.geocoded / d.ofPeople) : "—",
+            )}
+            ${data.optionalShare ? tile("books marked optional", pct(data.optionalShare.share)) : ""}
+          </div>
+
+          <div class="two" style="margin-top:1.5rem">
+            <div>
+              <p class="note">where they are from, by state</p>
+              ${bars(
+                data.hometownStates.slice(0, 10).map((s) => ({ label: s.state, value: s.people })),
+                { ink: "var(--aqua)", unit: " people" },
+              )}
+            </div>
+            <div>
+              <p class="note">share of a subject's meetings starting at or before 8am,
+                among subjects that meet at least four times</p>
+              ${bars(early, { ink: "var(--orange)", unit: "% early" })}
+            </div>
+          </div>
+
+          <p class="note" style="margin-top:1.5rem">the books the most people were told to buy</p>
+          ${bars(
+            data.commonBooks
+              .slice(0, 8)
+              .map((b) => ({ label: (b.title ?? b.isbn).slice(0, 52), value: b.students })),
+            { ink: "var(--violet)", unit: " students" },
+          )}
+
+          ${data.notes.map((note) => `<p class="note">· ${escape(note)}</p>`).join("")}`;
+      };
+
+      /**
+       * Fruchterman-Reingold, settled synchronously rather than animated —
+       * ~90 nodes converges in a few hundred iterations well under a frame
+       * budget most people would notice, so there is nothing to animate.
+       */
+      function forceLayout(nodes, edges, { width = 900, height = 480, iterations = 320 } = {}) {
+        const pos = new Map(
+          nodes.map((node, i) => {
+            const angle = (i / nodes.length) * Math.PI * 2;
+            return [
+              node.code,
+              { x: width / 2 + Math.cos(angle) * 140, y: height / 2 + Math.sin(angle) * 140, vx: 0, vy: 0 },
+            ];
+          }),
+        );
+
+        for (let iter = 0; iter < iterations; iter++) {
+          for (let i = 0; i < nodes.length; i++) {
+            const a = pos.get(nodes[i].code);
+            for (let j = i + 1; j < nodes.length; j++) {
+              const b = pos.get(nodes[j].code);
+              let dx = a.x - b.x;
+              let dy = a.y - b.y;
+              const distSq = dx * dx + dy * dy || 0.01;
+              const dist = Math.sqrt(distSq);
+              const force = 5000 / distSq;
+              dx /= dist;
+              dy /= dist;
+              a.vx += dx * force;
+              a.vy += dy * force;
+              b.vx -= dx * force;
+              b.vy -= dy * force;
+            }
+          }
+          for (const edge of edges) {
+            const a = pos.get(edge.a);
+            const b = pos.get(edge.b);
+            if (!a || !b) continue;
+            const dx = b.x - a.x;
+            const dy = b.y - a.y;
+            const dist = Math.sqrt(dx * dx + dy * dy) || 0.01;
+            const force = (dist - 90) * 0.02 * Math.log2(edge.shared + 1);
+            const fx = (dx / dist) * force;
+            const fy = (dy / dist) * force;
+            a.vx += fx;
+            a.vy += fy;
+            b.vx -= fx;
+            b.vy -= fy;
+          }
+          for (const node of nodes) {
+            const p = pos.get(node.code);
+            p.vx += (width / 2 - p.x) * 0.002;
+            p.vy += (height / 2 - p.y) * 0.002;
+            p.vx *= 0.85;
+            p.vy *= 0.85;
+            p.x = Math.min(width - 20, Math.max(20, p.x + p.vx));
+            p.y = Math.min(height - 20, Math.max(20, p.y + p.vy));
+          }
+        }
+        return pos;
+      }
+
+      const curriculumView = (data) => {
+        if (!data.nodes.length) {
+          return `<p class="note">not enough shared enrolment yet to draw a graph — try a lower minShared</p>`;
+        }
+        const width = 900;
+        const height = 480;
+        const pos = forceLayout(data.nodes, data.edges, { width, height });
+        const mostStudents = Math.max(1, ...data.nodes.map((node) => node.students));
+        const mostShared = Math.max(1, ...data.edges.map((edge) => edge.shared));
+
+        const edgeLines = data.edges
+          .map((edge) => {
+            const a = pos.get(edge.a);
+            const b = pos.get(edge.b);
+            if (!a || !b) return "";
+            const t = edge.shared / mostShared;
+            return `<line x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}"
+              stroke="var(--dim)" stroke-width="${(0.4 + t * 2.2).toFixed(2)}" stroke-opacity="${(0.12 + t * 0.35).toFixed(2)}" />`;
+          })
+          .join("");
+
+        const nodeCircles = data.nodes
+          .map((node) => {
+            const p = pos.get(node.code);
+            const r = 3 + Math.sqrt(node.students / mostStudents) * 14;
+            return `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${r.toFixed(1)}"
+              fill="var(--pink)" fill-opacity="0.85"
+              data-tip="${escape(`${node.code} · ${node.students} students`)}"></circle>`;
+          })
+          .join("");
+
+        const labels = data.nodes
+          .filter((node) => node.students >= mostStudents * 0.35)
+          .map((node) => {
+            const p = pos.get(node.code);
+            return `<text class="axis" x="${p.x.toFixed(1)}" y="${(p.y - 10).toFixed(1)}" text-anchor="middle">${escape(node.code)}</text>`;
+          })
+          .join("");
+
+        return `<svg viewBox="0 0 ${width} ${height}">${edgeLines}${nodeCircles}${labels}</svg>
+          <p class="note">${n(data.nodes.length)} courses, ${n(data.edges.length)} pairs sharing at
+            least ${data.minShared} students — circle size is enrolment, line weight is overlap</p>`;
+      };
+
       async function load() {
         try {
           const [stats, traffic, glossary] = await Promise.all([
@@ -365,6 +572,7 @@
             api("/v1/analytics"),
             api("/v1/glossary"),
           ]);
+          classes = glossary.classes;
           render(stats, traffic, glossary);
 
           // The expensive half, filled in as it lands: a term's timetable,
@@ -376,6 +584,16 @@
           }
           api("/v1/campus/traffic").then((data) => fill("walks", walksView(data)));
           api("/v1/majors/distribution").then((data) => fill("study", studyView(data)));
+          api("/v1/rooms/quiet?horizon=30").then((data) => fill("rooms", roomsView(data)));
+          api("/v1/faculty").then((data) => fill("faculty", facultyView(data)));
+          api("/v1/geography/leaderboard?by=class").then((data) =>
+            fill("geography", geographyView(data)),
+          );
+          api("/v1/pressure/leaderboard").then((data) => fill("pressure", pressureView(data)));
+          api("/v1/courses/graph?minShared=3").then((data) =>
+            fill("curriculum", curriculumView(data)),
+          );
+          api("/v1/stats/curiosities").then((data) => fill("curiosities", curiositiesView(data)));
         } catch (error) {
           if (error.message === "unauthorised") gate("that token was not it");
           else el.innerHTML = `<p class="err">${escape(error.message)}</p>`;
@@ -383,7 +601,6 @@
       }
 
       function render(stats, traffic, glossary) {
-        const className = (code) => glossary.classes[code] ?? code;
         const sections = stats.catalog.terms.reduce((sum, t) => sum + t.sections, 0);
         const courses = stats.catalog.terms.reduce((sum, t) => sum + t.courses, 0);
         const booklists = stats.booklists.reduce((sum, t) => sum + t.students, 0);
@@ -412,6 +629,37 @@
           <section><h2>where they walk</h2>
             <p class="note">arrivals per building, dorm to classroom</p>
             <div id="walks"><p class="note">routing…</p></div>
+          </section>
+
+          <section><h2>how far each class walks</h2>
+            <div id="geography"><p class="note">routing every schedule…</p></div>
+          </section>
+
+          <div class="two">
+            <section><h2>empty rooms right now</h2>
+              <p class="note">free for at least 30 minutes, quietest first</p>
+              <div id="rooms"><p class="note">checking the grid…</p></div>
+            </section>
+            <section><h2>who teaches the most</h2>
+              <div id="faculty"><p class="note">counting…</p></div>
+            </section>
+          </div>
+
+          <section><h2>fastest-filling sections</h2>
+            <p class="note">seats lost per hour, between the last two catalog collects</p>
+            <div id="pressure"><p class="note">comparing snapshots…</p></div>
+          </section>
+
+          <section><h2>odds and ends</h2>
+            <p class="note">the one-shot questions: where they come from, who draws the 8am slots,
+              and the book the most people were told to buy</p>
+            <div id="curiosities"><p class="note">counting…</p></div>
+          </section>
+
+          <section><h2>the shape of the curriculum</h2>
+            <p class="note">courses sharing students this term, force-directed — the gen-ed core
+              is the hub everything else hangs off</p>
+            <div id="curriculum"><p class="note">laying out the graph…</p></div>
           </section>
 
           <div class="two">
