@@ -85,6 +85,13 @@ export function replaceTerm(catalog: TermCatalog): number {
        title = excluded.title, credits = excluded.credits,
        payload = excluded.payload, fetched_at = excluded.fetched_at`,
   );
+  // Append-only: a seat snapshot is never updated, only added to. Two collects
+  // in the same instant (unlikely, but a re-run could) would collide on the
+  // primary key, so this is INSERT OR IGNORE rather than a plain INSERT.
+  const insertSeats = database.query(
+    `INSERT OR IGNORE INTO section_seats (term, section_id, observed_at, available, capacity, enrolled)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+  );
   const clearSections = database.query("DELETE FROM sections WHERE term = ? AND fetched_at < ?");
   const clearCourses = database.query("DELETE FROM courses WHERE term = ? AND fetched_at < ?");
 
@@ -104,6 +111,14 @@ export function replaceTerm(catalog: TermCatalog): number {
         number(s.Capacity),
         JSON.stringify(s),
         catalog.fetchedAt,
+      );
+      insertSeats.run(
+        catalog.term,
+        String(s.Id),
+        catalog.fetchedAt,
+        number(s.Available),
+        number(s.Capacity),
+        number(s.Enrolled),
       );
     }
     if (catalog.sections.length) clearSections.run(catalog.term, catalog.fetchedAt);
@@ -215,6 +230,12 @@ export function searchCourses(query: CourseQuery): CourseRow[] {
  * that matched nothing come back to the caller rather than vanishing: a
  * section in a booklist and not in the catalog is worth saying out loud.
  */
+/** Every section in a term, unpaginated -- for building derived tables, not for a client response. */
+export const sectionsForTerm = (term: string): SectionRow[] =>
+  db()
+    .query<SectionRow, [string]>(`${SECTION_SELECT} WHERE term = ? ORDER BY code, name`)
+    .all(term);
+
 export function sectionsByName(term: string, names: string[]): SectionRow[] {
   const wanted = [...new Set(names.map((name) => name.toUpperCase()))];
   if (!wanted.length) return [];
@@ -224,6 +245,20 @@ export function sectionsByName(term: string, names: string[]): SectionRow[] {
       `${SECTION_SELECT} WHERE term = ? AND UPPER(name) IN (${holes}) ORDER BY name`,
     )
     .all(term, ...wanted);
+}
+
+/** One section by the catalog's own id (e.g. "158001"), preferring the term asked for. */
+export function sectionById(sectionId: string, term?: string): SectionRow | null {
+  const database = db();
+  if (term) {
+    const hit = database
+      .query<SectionRow, [string, string]>(`${SECTION_SELECT} WHERE term = ? AND section_id = ?`)
+      .get(term, sectionId);
+    if (hit) return hit;
+  }
+  return database
+    .query<SectionRow, [string]>(`${SECTION_SELECT} WHERE section_id = ? ORDER BY term DESC`)
+    .get(sectionId);
 }
 
 /**
@@ -331,6 +366,32 @@ export const subjectLoad = (
        GROUP BY subject ORDER BY enrolled DESC`,
     )
     .all(term);
+
+export interface SeatSnapshot {
+  observedAt: string;
+  available: number | null;
+  capacity: number | null;
+  enrolled: number | null;
+}
+
+/** Every collect's seat count for one section, oldest first. The raw material for fill velocity. */
+export function seatHistory(term: string, sectionId: string): SeatSnapshot[] {
+  return db()
+    .query<SeatSnapshot, [string, string]>(
+      `SELECT observed_at AS observedAt, available, capacity, enrolled
+       FROM section_seats WHERE term = ? AND section_id = ? ORDER BY observed_at`,
+    )
+    .all(term, sectionId);
+}
+
+/** Every section with at least one snapshot this term -- section_seats is append-only, so a section a later collect cancelled still shows up here. */
+export const sectionsWithSeatHistory = (term: string): string[] =>
+  db()
+    .query<{ sectionId: string }, [string]>(
+      "SELECT DISTINCT section_id AS sectionId FROM section_seats WHERE term = ?",
+    )
+    .all(term)
+    .map((row) => row.sectionId);
 
 export interface TermStats {
   term: string;

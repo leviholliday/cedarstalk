@@ -127,6 +127,59 @@ CREATE TABLE IF NOT EXISTS sections (
 CREATE INDEX IF NOT EXISTS sections_course ON sections (term, course_id);
 CREATE INDEX IF NOT EXISTS sections_code ON sections (code);
 
+-- Seats, over time. \`sections\` above is overwritten on every collect, which
+-- is right for "what does this section look like now" and wrong for "how
+-- fast did it fill" -- that question needs every collect kept, not just the
+-- latest. Append-only; one row per section per collect.
+CREATE TABLE IF NOT EXISTS section_seats (
+  term        TEXT NOT NULL,
+  section_id  TEXT NOT NULL,
+  observed_at TEXT NOT NULL,
+  available   INTEGER,
+  capacity    INTEGER,
+  enrolled    INTEGER,
+  PRIMARY KEY (term, section_id, observed_at)
+) STRICT;
+
+CREATE INDEX IF NOT EXISTS section_seats_lookup ON section_seats (term, section_id, observed_at);
+
+-- Every (building, room) a term's catalog actually meets in, kept across
+-- terms rather than only the latest -- a room used in the spring and not the
+-- fall should not disappear because the fall crawl never saw it.
+CREATE TABLE IF NOT EXISTS rooms (
+  term         TEXT NOT NULL,
+  building     TEXT NOT NULL,
+  room         TEXT NOT NULL,
+  campus_label TEXT,             -- buildings.label, when the name resolves
+  sections     INTEGER NOT NULL DEFAULT 0,
+  fetched_at   TEXT NOT NULL,
+  PRIMARY KEY (term, building, room)
+) STRICT;
+
+CREATE INDEX IF NOT EXISTS rooms_building ON rooms (term, building);
+
+-- The occupancy grid: one row per room per meeting-day, flattened from
+-- sections.payload so every free-room/quietness query is an index scan
+-- rather than a JSON parse of the whole term. A materialized view, rebuilt
+-- wholesale after every catalog collect -- never written to by hand.
+CREATE TABLE IF NOT EXISTS room_occupancy (
+  term       TEXT NOT NULL,
+  building   TEXT NOT NULL,
+  room       TEXT NOT NULL,
+  day        INTEGER NOT NULL,  -- 0 = Sunday
+  start_min  INTEGER NOT NULL,
+  end_min    INTEGER NOT NULL,
+  section_id TEXT NOT NULL,
+  code       TEXT,
+  name       TEXT,
+  title      TEXT,
+  kind       TEXT,
+  enrolled   INTEGER
+) STRICT;
+
+CREATE INDEX IF NOT EXISTS room_occupancy_room ON room_occupancy (term, building, room, day, start_min);
+CREATE INDEX IF NOT EXISTS room_occupancy_building ON room_occupancy (term, building, day, start_min);
+
 CREATE TABLE IF NOT EXISTS courses (
   term       TEXT NOT NULL,
   course_id  TEXT NOT NULL,
@@ -284,6 +337,13 @@ export function db(path = config.databasePath): Database {
   handle.exec("PRAGMA journal_mode = WAL");
   handle.exec("PRAGMA synchronous = NORMAL");
   handle.exec("PRAGMA foreign_keys = ON");
+  // WAL lets readers run alongside a writer, but not two writers -- and there
+  // are three processes writing now: the server taking synced batches, the
+  // catalog collector, and the directory sweep. Without a busy timeout the
+  // loser of a collision fails instantly with SQLITE_BUSY, which is how the
+  // scheduled catalog collect was dying. Ten seconds is far longer than any
+  // of these transactions takes, so a collision becomes a short wait.
+  handle.exec("PRAGMA busy_timeout = 10000");
   handle.exec(SCHEMA);
   return handle;
 }

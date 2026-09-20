@@ -29,6 +29,7 @@ import { catalogYear, currentTerm } from "./lib/terms";
 import { evaluate } from "./model/evaluate";
 import { guessAll, guessFor } from "./model/guess";
 import { forgetModel } from "./model/major";
+import { rebuildOccupancy } from "./model/occupancy";
 import { buildings } from "./store/campus";
 import { termStats } from "./store/catalog";
 import { harvestTerms } from "./store/harvest";
@@ -65,6 +66,9 @@ const endProgress = () => {
 };
 
 async function collect(what: string | undefined): Promise<void> {
+  // positional is ["collect", what, ...]; args realigns so args[1] is the
+  // first argument after the subcommand (e.g. a term, a year, a rule part).
+  const args = positional.slice(1);
   switch (what) {
     case "directory": {
       const result = await sweepDirectory({
@@ -113,7 +117,7 @@ async function collect(what: string | undefined): Promise<void> {
         say("courses", n(courses));
         return;
       }
-      const term = positional[1] ?? currentTerm();
+      const term = args[1] ?? currentTerm();
       const result = await crawlTerm(term, {
         onProgress: (p) =>
           progress(`${blue(term)} ${p.phase}  page ${p.page}/${p.pages}  ${n(p.items)}`),
@@ -126,7 +130,7 @@ async function collect(what: string | undefined): Promise<void> {
     }
 
     case "book": {
-      const year = positional[1] ?? catalogYear();
+      const year = args[1] ?? catalogYear();
       const book = await crawlBook(year, {
         onProgress: (p) =>
           progress(`${pink(year)}  page ${p.page}/${p.pages}  ${p.programs} programs`),
@@ -153,7 +157,7 @@ async function collect(what: string | undefined): Promise<void> {
     }
 
     case "rule": {
-      const [, requirement, subrequirement, group] = positional;
+      const [, requirement, subrequirement, group] = args;
       if (!requirement || !subrequirement || !group) {
         console.error("usage: engine collect rule <requirement> <subrequirement> <group>");
         process.exit(1);
@@ -334,6 +338,22 @@ async function main(): Promise<void> {
       return;
     }
 
+    case "rebuild": {
+      // A materialized table (the occupancy grid, so far) should never be
+      // load-bearing on its own derivation logic -- if it drifts, this puts
+      // it back without re-crawling anything.
+      const terms = positional.slice(1).length
+        ? positional.slice(1)
+        : termStats()
+            .map((t) => t.term)
+            .filter((t) => t !== "ALL");
+      for (const term of terms) {
+        const result = rebuildOccupancy(term);
+        say(term, `${n(result.rooms)} rooms, ${n(result.slots)} slots`);
+      }
+      return;
+    }
+
     case "stats": {
       const people = peopleStats();
       say("people", n(people.people));
@@ -375,6 +395,7 @@ async function main(): Promise<void> {
           "  labels <file.csv>           load known majors",
           "  evaluate                    score the model",
           '  guess "First Last" | --all  guess a major',
+          "  rebuild [term...]           redo the occupancy grid from the catalog",
           "  stats                       what the engine holds",
         ].join("\n"),
       );

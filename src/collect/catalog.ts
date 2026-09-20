@@ -11,6 +11,7 @@
  * them.
  */
 
+import { rebuildOccupancy } from "../model/occupancy";
 import { ALL_COURSES, replaceTerm, writeRule } from "../store/catalog";
 import { GuestColleague, resolveGroup } from "./colleague";
 
@@ -79,6 +80,7 @@ export async function crawlTerm(
   if (!sections.length) return { sections: 0, courses: courses.length };
 
   replaceTerm({ term, fetchedAt: new Date().toISOString(), sections, courses });
+  rebuildOccupancy(term);
   return { sections: sections.length, courses: courses.length };
 }
 
