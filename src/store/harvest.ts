@@ -91,6 +91,15 @@ export function enrolmentOf(studentId: string, term?: string): Enrolment[] {
     }));
 }
 
+/** Every student with a booklist this term -- the population `scheduleFor` can actually route. */
+export const harvestedStudentIds = (term: string): string[] =>
+  db()
+    .query<{ studentId: string }, [string]>(
+      "SELECT DISTINCT student_id AS studentId FROM booklists WHERE term = ?",
+    )
+    .all(term)
+    .map((row) => row.studentId);
+
 export interface IngestTally {
   students: number;
   withBooks: number;

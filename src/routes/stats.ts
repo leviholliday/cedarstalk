@@ -1,7 +1,9 @@
 /** What the engine holds, and how it is being used. */
 
 import { analytics } from "../lib/analytics";
-import { json, num } from "../lib/http";
+import { json, num, q } from "../lib/http";
+import { currentTerm } from "../lib/terms";
+import { curiosities } from "../model/curiosities";
 import { buildings } from "../store/campus";
 import { termStats } from "../store/catalog";
 import { harvestTerms, metricHistory } from "../store/harvest";
@@ -36,5 +38,14 @@ export const statsRoutes: RouteDef[] = [
     summary: "Request volume and latency",
     query: [{ name: "hours", description: "Window, default 24" }],
     handler: (_request, url) => json(analytics(num(url, "hours") ?? 24)),
+  },
+  {
+    method: "GET",
+    path: "/v1/stats/curiosities",
+    tag: "engine",
+    summary:
+      "The one-shot questions: where they're from, who teaches at 8am, the most-assigned book",
+    query: [{ name: "term", description: "Term code. Defaults to the current one." }],
+    handler: (_request, url) => json(curiosities(q(url, "term") ?? currentTerm())),
   },
 ];

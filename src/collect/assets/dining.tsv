@@ -1,0 +1,12 @@
+# Which buildings.label values are dining halls.
+#
+# Nothing collected anywhere -- OSM, the directory, the catalog -- tags a
+# building's function, so this has to be told rather than derived. Empty by
+# design: a guessed building name here would make /v1/dining/forecast quietly
+# wrong rather than honestly empty. Fill in real dining hall names as they're
+# known, one per line, matching buildings.label exactly (see
+# `bun run engine stats` or GET /v1/campus/buildings for the exact strings).
+#
+# GET /v1/dining/forecast also takes a `buildings=` query param for a one-off
+# override without editing this file.
+label

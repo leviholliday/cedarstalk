@@ -3,10 +3,13 @@
 import { json } from "../lib/http";
 import { peopleStats } from "../store/people";
 import { campusRoutes } from "./campus";
+import { carpoolRoutes } from "./carpool";
 import { catalogRoutes } from "./catalog";
+import { facultyRoutes } from "./faculty";
 import { historyRoutes } from "./history";
 import { majorRoutes } from "./majors";
 import { peopleRoutes } from "./people";
+import { roomRoutes } from "./rooms";
 import { statsRoutes } from "./stats";
 import { syncRoutes } from "./sync";
 import type { RouteDef } from "./types";
@@ -36,6 +39,9 @@ export const routes: RouteDef[] = [
   ...catalogRoutes,
   ...majorRoutes,
   ...campusRoutes,
+  ...roomRoutes,
+  ...facultyRoutes,
+  ...carpoolRoutes,
   ...historyRoutes,
   ...syncRoutes,
   ...statsRoutes,

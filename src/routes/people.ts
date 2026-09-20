@@ -1,11 +1,16 @@
 /** Who is here, where they live, what they are probably studying. */
 
-import { bool, json, notFound, num, q } from "../lib/http";
+import { badRequest, bool, json, notFound, num, q, required } from "../lib/http";
+import { currentTerm } from "../lib/terms";
+import { degreeAudit } from "../model/audit";
+import { geographyLeaderboard, scheduleGeography } from "../model/geography";
 import { guessFor } from "../model/guess";
-import { scheduleFor } from "../model/schedule";
+import { locationNow, scheduleFor } from "../model/schedule";
+import { twinSchedulesFor } from "../model/twins";
 import { locate } from "../store/campus";
 import { booklistTimeline, personTimeline } from "../store/history";
-import { peopleStats, personById, searchPeople } from "../store/people";
+import { dormRooms, peopleStats, personById, roommatesOf, searchPeople } from "../store/people";
+import { latestYear, listPrograms } from "../store/programs";
 import type { RouteDef } from "./types";
 
 export const peopleRoutes: RouteDef[] = [
@@ -109,9 +114,145 @@ export const peopleRoutes: RouteDef[] = [
   },
   {
     method: "GET",
+    path: "/v1/people/:id/location/now",
+    tag: "people",
+    summary:
+      "In class right now, or their dorm/office as the fallback -- as current as the last harvest",
+    query: [
+      {
+        name: "at",
+        description: 'ISO datetime, or "now" (default) -- for checking a specific moment',
+      },
+    ],
+    handler: (request, url) => {
+      const id = request.params.id ?? "";
+      if (!personById(id)) throw notFound("no such person");
+      const raw = q(url, "at");
+      const at = raw && raw.toLowerCase() !== "now" ? new Date(raw) : new Date();
+      if (Number.isNaN(at.getTime())) throw badRequest('"at" must be an ISO datetime or "now"');
+      return json(locationNow(id, at));
+    },
+  },
+  {
+    method: "GET",
+    path: "/v1/people/:id/roommates",
+    tag: "people",
+    summary: "Everyone else listed against the exact same dorm room",
+    handler: (request) => {
+      const id = request.params.id ?? "";
+      const person = personById(id);
+      if (!person) throw notFound("no such person");
+      return json({
+        dormName: person.dormName,
+        dormRoom: person.dormRoom,
+        roommates: roommatesOf(id),
+      });
+    },
+  },
+  {
+    method: "GET",
+    path: "/v1/people/:id/geography",
+    tag: "people",
+    summary:
+      "How far a student's own schedule makes them walk -- routed metres, and any impossible transitions",
+    query: [
+      {
+        name: "term",
+        description: "Term code. Defaults to the current one, then the newest held.",
+      },
+    ],
+    handler: (request, url) => {
+      const geography = scheduleGeography(request.params.id ?? "", q(url, "term"));
+      if (!geography) throw notFound("no booklist data for that person");
+      return json(geography);
+    },
+  },
+  {
+    method: "GET",
+    path: "/v1/geography/leaderboard",
+    tag: "people",
+    summary: "Every scoreable student's weekly walking distance, worst first",
+    query: [{ name: "by", description: "class (default) or major" }],
+    handler: (_request, url) => {
+      const by = (q(url, "by") ?? "class") as "class" | "major";
+      if (!["class", "major"].includes(by)) throw badRequest("by must be class or major");
+      return json(geographyLeaderboard(by));
+    },
+  },
+  {
+    method: "GET",
+    path: "/v1/people/:id/twins",
+    tag: "people",
+    summary: "Who else shares this student's own sections, most shared first",
+    query: [
+      { name: "term", description: "Term code. Defaults to the current one." },
+      { name: "minShared", description: "Minimum shared sections to count. Default 2." },
+    ],
+    handler: (request, url) => {
+      const id = request.params.id ?? "";
+      if (!personById(id)) throw notFound("no such person");
+      const term = q(url, "term") ?? currentTerm();
+      const minShared = num(url, "minShared") ?? 2;
+      return json({ term, minShared, twins: twinSchedulesFor(term, id, minShared) });
+    },
+  },
+  {
+    method: "GET",
+    path: "/v1/people/:id/audit",
+    tag: "people",
+    summary:
+      "Which of one program's courses a student's harvested booklists have seen -- not a transcript",
+    query: [
+      {
+        name: "program",
+        description: "Program title, or enough of it to match one",
+        required: true,
+      },
+      { name: "year", description: "Catalog year. Defaults to the newest held." },
+    ],
+    handler: (request, url) => {
+      const id = request.params.id ?? "";
+      if (!personById(id)) throw notFound("no such person");
+
+      const year = q(url, "year") ?? latestYear();
+      if (!year) throw notFound("no catalog collected yet");
+
+      const query = required(url, "program");
+      const matches = listPrograms(year, query);
+      const program =
+        matches.find((p) => p.title.toLowerCase() === query.toLowerCase()) ??
+        (matches.length === 1 ? matches[0] : null);
+      if (!program) {
+        if (matches.length > 1) {
+          throw badRequest(
+            `${matches.length} programs match "${query}": ${matches.map((p) => p.title).join(", ")}`,
+          );
+        }
+        throw notFound(`no program matching "${query}"`);
+      }
+
+      const audit = degreeAudit(id, program);
+      if (!audit) throw notFound("no booklist data for that person");
+      return json({ year, ...audit });
+    },
+  },
+  {
+    method: "GET",
     path: "/v1/dorms",
     tag: "people",
     summary: "Population by dorm",
     handler: () => json({ dorms: peopleStats().byDorm }),
+  },
+  {
+    method: "GET",
+    path: "/v1/dorms/:name/rooms",
+    tag: "people",
+    summary: "Every occupied room in a hall, grouped -- the roommate graph for a whole building",
+    handler: (request) => {
+      const name = decodeURIComponent(request.params.name ?? "");
+      const rooms = dormRooms(name);
+      if (!rooms.length) throw notFound("no occupied rooms for that dorm name");
+      return json({ dormName: name, rooms });
+    },
   },
 ];

@@ -13,6 +13,7 @@
 import { Database } from "bun:sqlite";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
+import { rebuildOccupancy } from "../model/occupancy";
 import { replaceTerm, writeRule } from "../store/catalog";
 import { ingestHarvest } from "../store/harvest";
 import { finishSweep, startSweep } from "../store/history";
@@ -92,6 +93,7 @@ export function importCatalog(path: string) {
       sections: sectionRows.map((row) => JSON.parse(row.payload)),
       courses: courseRows.map((row) => JSON.parse(row.payload)),
     });
+    rebuildOccupancy(term);
     sections += sectionRows.length;
     courses += courseRows.length;
   }

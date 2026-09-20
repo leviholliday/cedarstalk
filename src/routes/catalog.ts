@@ -1,17 +1,23 @@
 /** The course catalog: what exists, what is offered, and what it requires. */
 
 import { bool, json, notFound, num, q, required } from "../lib/http";
+import { currentTerm } from "../lib/terms";
+import { courseGraph } from "../model/curriculum";
+import { pressureLeaderboard, sectionPressure } from "../model/pressure";
 import {
   ALL_COURSES,
   courseByCode,
   readRule,
   searchCourses,
   searchSections,
+  sectionById,
   subjectLoad,
   termStats,
   timetable,
 } from "../store/catalog";
+import { peopleByIds } from "../store/people";
 import { latestYear, listPrograms, programByPage, programYears } from "../store/programs";
+import { rosterFor } from "../store/rosters";
 import type { RouteDef } from "./types";
 
 const parsed = (payload: string) => JSON.parse(payload);
@@ -144,6 +150,75 @@ export const catalogRoutes: RouteDef[] = [
       const program = programByPage(year, Number(request.params.page));
       if (!program) throw notFound("no program on that page");
       return json(program);
+    },
+  },
+  {
+    method: "GET",
+    path: "/v1/sections/:id/roster",
+    tag: "catalog",
+    summary:
+      "Who a section actually holds, inverted from booklists -- with its own coverage figure",
+    query: [{ name: "term", description: "Term code. Defaults to the current one." }],
+    handler: (request, url) => {
+      const term = q(url, "term") ?? currentTerm();
+      const section = sectionById(request.params.id ?? "", term);
+      const name = section?.name;
+      if (!name) throw notFound("no such section that term");
+
+      const roster = rosterFor(term, name);
+      const people = roster ? peopleByIds(roster.studentIds) : [];
+      return json({
+        term,
+        sectionId: section.sectionId,
+        sectionName: name,
+        enrolled: roster?.enrolled ?? null,
+        coverage: roster?.coverage ?? null,
+        students: people.map((p) => ({
+          id: p.id,
+          name: `${p.nickname ?? p.firstName ?? ""} ${p.lastName ?? ""}`.trim(),
+          dormName: p.dormName,
+          studentClass: p.studentClass,
+        })),
+      });
+    },
+  },
+  {
+    method: "GET",
+    path: "/v1/sections/:id/pressure",
+    tag: "catalog",
+    summary: "One section's seat curve and fill rate, from however many collects have run so far",
+    query: [{ name: "term", description: "Term code. Defaults to the current one." }],
+    handler: (request, url) => {
+      const term = q(url, "term") ?? currentTerm();
+      const pressure = sectionPressure(term, request.params.id ?? "");
+      if (!pressure) throw notFound("no seat history for that section yet");
+      return json(pressure);
+    },
+  },
+  {
+    method: "GET",
+    path: "/v1/pressure/leaderboard",
+    tag: "catalog",
+    summary: "Fastest-filling sections this term, by seats per hour -- needs at least two collects",
+    query: [{ name: "term", description: "Term code. Defaults to the current one." }],
+    handler: (_request, url) => {
+      const term = q(url, "term") ?? currentTerm();
+      return json({ term, sections: pressureLeaderboard(term) });
+    },
+  },
+  {
+    method: "GET",
+    path: "/v1/courses/graph",
+    tag: "catalog",
+    summary: "Courses sharing students, as a weighted graph -- the curriculum's actual shape",
+    query: [
+      { name: "term", description: "Term code. Defaults to the current one." },
+      { name: "minShared", description: "Minimum shared students for an edge. Default 3." },
+    ],
+    handler: (_request, url) => {
+      const term = q(url, "term") ?? currentTerm();
+      const minShared = num(url, "minShared") ?? 3;
+      return json(courseGraph(term, minShared));
     },
   },
 ];

@@ -275,6 +275,63 @@ export function searchPeople(query: PeopleQuery): Person[] {
 export const personById = (id: string): Person | null =>
   db().query<Person, [string]>(`${SELECT} WHERE id = ?`).get(id);
 
+/** A batch of ids in one query rather than one round trip per person -- a roster, a dorm, a cluster. */
+export function peopleByIds(ids: string[]): Person[] {
+  const unique = [...new Set(ids)];
+  if (!unique.length) return [];
+  const holes = unique.map(() => "?").join(", ");
+  return db()
+    .query<Person, string[]>(`${SELECT} WHERE id IN (${holes})`)
+    .all(...unique);
+}
+
+/**
+ * Everyone else listed against the exact same room.
+ *
+ * Checked against real data before writing this: neither odd room-number
+ * convention here needs any stripping. A College View apartment's "101-1" /
+ * "101-2" already holds exactly two people per exact string (one per
+ * bedroom), and Printy/Lawlor's "37A" / "37B" / "37C" / "37D" are each their
+ * own double, not sub-slots of one room "37". Plain exact match on
+ * (dorm_name, dorm_room) is the right level for both.
+ */
+export function roommatesOf(studentId: string): Person[] {
+  const person = personById(studentId);
+  if (!person?.dormName || !person.dormRoom) return [];
+  return db()
+    .query<Person, [string, string, string]>(
+      `${SELECT} WHERE dorm_name = ? AND dorm_room = ? AND id != ? AND present = 1
+       ORDER BY last_name, first_name`,
+    )
+    .all(person.dormName, person.dormRoom, studentId);
+}
+
+export interface DormRoom {
+  room: string;
+  occupants: Person[];
+}
+
+/** Every occupied room in a hall, grouped -- the roommate graph for a whole building at once. */
+export function dormRooms(dormName: string): DormRoom[] {
+  const people = db()
+    .query<Person, [string]>(
+      `${SELECT} WHERE dorm_name = ? AND dorm_room IS NOT NULL AND present = 1
+       ORDER BY dorm_room, last_name, first_name`,
+    )
+    .all(dormName);
+
+  const byRoom = new Map<string, Person[]>();
+  for (const person of people) {
+    const room = person.dormRoom!;
+    const occupants = byRoom.get(room) ?? [];
+    occupants.push(person);
+    byRoom.set(room, occupants);
+  }
+  return [...byRoom.entries()]
+    .map(([room, occupants]) => ({ room, occupants }))
+    .sort((a, b) => a.room.localeCompare(b.room, undefined, { numeric: true }));
+}
+
 /** Name → id, the join the major model needs. Nicknames count as first names. */
 export function findByName(first: string, last: string): Person[] {
   return db()
