@@ -15,28 +15,13 @@
  */
 
 import { currentTerm } from "../lib/terms";
-import { type SectionRow, sectionsByName } from "../store/catalog";
+import { type Located, locate } from "../store/campus";
+import { sectionsByName } from "../store/catalog";
 import { enrolmentOf } from "../store/harvest";
 import { personById } from "../store/people";
+import { creditsOf, DAY_NAMES, type Meeting, meetingsOf, meetsInPerson } from "./meetings";
 
-/** Colleague counts days the way `Date.getDay` does: Sunday is 0. */
-const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-
-export interface Meeting {
-  /** 0 is Sunday. A lecture on M/W/F is one meeting with three days. */
-  days: number[];
-  daysDisplay: string | null;
-  /** 24-hour, "09:00". Null for an online section that never meets. */
-  start: string | null;
-  end: string | null;
-  minutes: number;
-  kind: string | null;
-  building: string | null;
-  room: string | null;
-  online: boolean;
-  startDate: string | null;
-  endDate: string | null;
-}
+export type { Meeting };
 
 export interface ScheduledSection {
   name: string;
@@ -84,64 +69,6 @@ export interface Schedule {
   unmatched: string[];
   harvestedAt: string | null;
 }
-
-interface RawMeeting {
-  Days?: number[];
-  DaysOfWeekDisplay?: string;
-  StartTime?: string;
-  EndTime?: string;
-  InstructionalMethodDisplay?: string;
-  BuildingDisplay?: string;
-  RoomDisplay?: string;
-  IsOnline?: boolean;
-  StartDate?: string;
-  EndDate?: string;
-}
-
-const clean = (value: string | undefined): string | null => value?.trim() || null;
-
-/** "09:50:00" is three fields of precision for a thing measured in minutes. */
-const clock = (value: string | undefined): string | null => {
-  const parts = clean(value)?.split(":");
-  return parts && parts.length >= 2 ? `${parts[0]}:${parts[1]}` : null;
-};
-
-const minutesBetween = (start: string | null, end: string | null): number => {
-  if (!start || !end) return 0;
-  const [sh, sm] = start.split(":").map(Number);
-  const [eh, em] = end.split(":").map(Number);
-  return Math.max(0, eh! * 60 + em! - (sh! * 60 + sm!));
-};
-
-function meetingsOf(section: SectionRow): Meeting[] {
-  const payload = JSON.parse(section.payload) as { FormattedMeetingTimes?: RawMeeting[] };
-  return (payload.FormattedMeetingTimes ?? []).map((raw) => {
-    const start = clock(raw.StartTime);
-    const end = clock(raw.EndTime);
-    return {
-      days: (raw.Days ?? []).filter((day) => day >= 0 && day <= 6),
-      daysDisplay: clean(raw.DaysOfWeekDisplay),
-      start,
-      end,
-      minutes: minutesBetween(start, end),
-      kind: clean(raw.InstructionalMethodDisplay),
-      building: clean(raw.BuildingDisplay),
-      room: clean(raw.RoomDisplay),
-      online: raw.IsOnline === true,
-      startDate: clean(raw.StartDate),
-      endDate: clean(raw.EndDate),
-    };
-  });
-}
-
-const creditsOf = (section: SectionRow): number | null => {
-  const payload = JSON.parse(section.payload) as { MinimumCredits?: number | null };
-  return typeof payload.MinimumCredits === "number" ? payload.MinimumCredits : null;
-};
-
-/** A section is online when nothing about it has a day and an hour. */
-const meetsInPerson = (meetings: Meeting[]): boolean =>
-  meetings.some((meeting) => !meeting.online && meeting.days.length && meeting.start);
 
 export function scheduleFor(studentId: string, term?: string): Schedule | null {
   const harvested = enrolmentOf(studentId);
@@ -201,5 +128,66 @@ export function scheduleFor(studentId: string, term?: string): Schedule | null {
     online: scheduled.filter((section) => !meetsInPerson(section.meetings)),
     unmatched: (held?.sections ?? []).filter((name) => !found.has(name.toUpperCase())),
     harvestedAt: held?.fetchedAt ?? null,
+  };
+}
+
+export interface LocationNow {
+  studentId: string;
+  at: string;
+  /** "in class" when a scheduled block covers this instant, else "free" if there's a schedule to check against at all. */
+  status: "in class" | "free" | "no schedule data";
+  inClass: {
+    section: string;
+    title: string | null;
+    building: string | null;
+    room: string | null;
+    /** "HH:MM", when this block lets out. */
+    endsAt: string;
+  } | null;
+  /** Dorm or office -- always attempted, in class or not, as the fallback answer. */
+  location: Located | null;
+  /** How current the schedule this is based on is. Null with no booklist at all. */
+  harvestedAt: string | null;
+}
+
+const clockMinutes = (hhmm: string): number => {
+  const [h, m] = hhmm.split(":").map(Number);
+  return h! * 60 + m!;
+};
+
+/**
+ * "Where is this person right now" -- honestly. In class if the moment falls
+ * inside a scheduled block, their dorm or office as the fallback either way,
+ * and `harvestedAt` so a caller can see how stale the booklist this is built
+ * from might be. A section a booklist never named, or one dropped since the
+ * last harvest, simply will not show up here.
+ */
+export function locationNow(studentId: string, at: Date = new Date()): LocationNow {
+  const schedule = scheduleFor(studentId);
+  const day = at.getDay();
+  const nowMinutes = at.getHours() * 60 + at.getMinutes();
+
+  let inClass: LocationNow["inClass"] = null;
+  const today = schedule?.week.find((d) => d.day === day);
+  const block = today?.blocks.find(
+    (b) => clockMinutes(b.start) <= nowMinutes && nowMinutes < clockMinutes(b.end),
+  );
+  if (block) {
+    inClass = {
+      section: block.section,
+      title: block.title,
+      building: block.building,
+      room: block.room,
+      endsAt: block.end,
+    };
+  }
+
+  return {
+    studentId,
+    at: at.toISOString(),
+    status: inClass ? "in class" : schedule ? "free" : "no schedule data",
+    inClass,
+    location: locate(studentId),
+    harvestedAt: schedule?.harvestedAt ?? null,
   };
 }
