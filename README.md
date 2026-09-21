@@ -177,6 +177,30 @@ anybody. A resumed sweep skips the queries an earlier run finished, so most
 people were never asked about — retiring on that would graduate the whole
 school. `collect directory --refresh` is the one that counts.
 
+## On your phone
+
+`/mobile` is a small, separate page from the dashboard -- three things, one
+screen each: the quietest free rooms, a person's location right now, and who
+is scheduled to be in a building. It shares the dashboard's token gate, so the
+same bearer token unlocks both.
+
+**Reach it over Tailscale, never publicly.** This holds real students' dorm
+rooms and daily movements; it does not belong on the open internet under any
+circumstances -- no ngrok, no port forwarding, no Tailscale Funnel. Install
+Tailscale on the machine running the engine and on the phone, then set:
+
+```bash
+HOST=<the machine's own tailnet IP or MagicDNS name>   # not 0.0.0.0
+```
+
+and open `http://<that address>:3000/mobile` from the phone. `HOST` binds the
+server to that one address and nowhere else -- a stronger guarantee than a
+firewall rule, since there is no other interface for it to be listening on.
+
+Also useful: an iOS Shortcut can call the API directly over the same tailnet
+(`GET /v1/people/:id/location/now` with the bearer token in the header) for a
+one-tap Home Screen button, no browser needed.
+
 ## Hosting
 
 Same as everything else I run: a systemd user service and a Caddy entry.
