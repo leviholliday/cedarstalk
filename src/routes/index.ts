@@ -8,6 +8,7 @@ import { catalogRoutes } from "./catalog";
 import { facultyRoutes } from "./faculty";
 import { historyRoutes } from "./history";
 import { majorRoutes } from "./majors";
+import { bookRoutes } from "./books";
 import { peopleRoutes } from "./people";
 import { roomRoutes } from "./rooms";
 import { statsRoutes } from "./stats";
@@ -35,6 +36,7 @@ const healthRoute: RouteDef = {
 
 export const routes: RouteDef[] = [
   healthRoute,
+  ...bookRoutes,
   ...peopleRoutes,
   ...catalogRoutes,
   ...majorRoutes,
