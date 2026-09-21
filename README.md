@@ -6,6 +6,10 @@ booklists, and the campus itself.
 
 The canonical repo for this is hosted on tangled over at [`https://tangled.org/dunkirk.sh/cedarengine`](https://tangled.org/dunkirk.sh/cedarengine)
 
+This particular copy is Levi Holliday's private fork, built out for Cedarville
+University specifically -- new collectors, routes and a Raycast extension on
+top of Kieran's original engine and data model. Same MIT license, unchanged.
+
 <p align="center">
     <img src="https://raw.githubusercontent.com/taciturnaxolotl/carriage/main/.github/images/line-break-thin.svg" />
 </p>
