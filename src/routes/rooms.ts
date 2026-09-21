@@ -10,6 +10,7 @@ import { badRequest, json, notFound, num, q } from "../lib/http";
 import { adjacencyOf, shortestPath } from "../lib/route";
 import { currentTerm } from "../lib/terms";
 import { buildingProfile } from "../model/buildings";
+import { presenceAt } from "../model/presence";
 import { roomUtilization } from "../model/occupancy";
 import { buildingRhythm, type QuietRoom, quietRoomsAt } from "../model/quiet";
 import { buildingByLabel, campusMap } from "../store/campus";
@@ -157,6 +158,22 @@ export const roomRoutes: RouteDef[] = [
             : {}),
         })),
       });
+    },
+  },
+  {
+    method: "GET",
+    path: "/v1/buildings/:name/who",
+    tag: "rooms",
+    summary: "Who is scheduled to be in a building right now, section by section",
+    query: [
+      { name: "term", description: "Term code. Defaults to the current one." },
+      { name: "at", description: 'ISO datetime, or "now" (default)' },
+    ],
+    handler: (request, url) => {
+      const term = q(url, "term") ?? currentTerm();
+      const { day, minute, at } = parseAt(q(url, "at"));
+      const building = decodeURIComponent(request.params.name ?? "");
+      return json({ term, at, ...presenceAt(term, building, day, minute) });
     },
   },
   {

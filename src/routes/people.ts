@@ -6,6 +6,7 @@ import { degreeAudit } from "../model/audit";
 import { geographyLeaderboard, scheduleGeography } from "../model/geography";
 import { guessFor } from "../model/guess";
 import { locationNow, scheduleFor } from "../model/schedule";
+import { availabilityFor } from "../model/availability";
 import { twinSchedulesFor } from "../model/twins";
 import { locate } from "../store/campus";
 import { booklistTimeline, personTimeline } from "../store/history";
@@ -177,6 +178,44 @@ export const peopleRoutes: RouteDef[] = [
       const by = (q(url, "by") ?? "class") as "class" | "major";
       if (!["class", "major"].includes(by)) throw badRequest("by must be class or major");
       return json(geographyLeaderboard(by));
+    },
+  },
+  {
+    method: "GET",
+    path: "/v1/people/free",
+    tag: "people",
+    summary: "When several people are all free on one day, and whose class ends each window",
+    query: [
+      { name: "ids", description: "2-10 directory ids, comma-separated", required: true },
+      { name: "day", description: "0 (Sunday) - 6. Defaults to today." },
+      { name: "from", description: "Earliest clock time, default 08:00" },
+      { name: "to", description: "Latest clock time, default 22:00" },
+      { name: "minMinutes", description: "Ignore windows shorter than this. Default 30." },
+      { name: "term", description: "Term code. Defaults to the current one." },
+    ],
+    handler: (_request, url) => {
+      const raw = q(url, "ids");
+      if (!raw) throw badRequest("ids is required");
+      const ids = raw
+        .split(",")
+        .map((id) => id.trim())
+        .filter(Boolean);
+      if (ids.length < 2) throw badRequest("ids needs at least 2 people");
+      if (ids.length > 10) throw badRequest("ids takes at most 10 people");
+
+      const day = num(url, "day") ?? new Date().getDay();
+      if (day < 0 || day > 6) throw badRequest("day must be 0-6");
+
+      return json(
+        availabilityFor(
+          ids,
+          day,
+          q(url, "from") ?? "08:00",
+          q(url, "to") ?? "22:00",
+          num(url, "minMinutes") ?? 30,
+          q(url, "term"),
+        ),
+      );
     },
   },
   {
