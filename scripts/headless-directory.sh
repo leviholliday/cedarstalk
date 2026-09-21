@@ -32,9 +32,23 @@ log() { echo "$(date '+%Y-%m-%d %H:%M:%S')  $*"; }
 # the default so that switching is a deliberate act rather than a surprise.
 AUTH="${AUTH:-swift}"
 
+# launchd agents run with a minimal PATH (/usr/bin:/bin:/usr/sbin:/sbin), so
+# `command -v bun` finds nothing even though bun works fine in an interactive
+# shell -- this is what actually broke the first unattended run: the fallback
+# guessed ~/.bun/bin/bun, which does not exist on this machine at all (bun is
+# a Homebrew install at /opt/homebrew/bin/bun). Checked in the order real
+# installs are likely to be found.
+resolve_bun() {
+  command -v bun && return
+  for candidate in /opt/homebrew/bin/bun /usr/local/bin/bun "$HOME/.bun/bin/bun"; do
+    [ -x "$candidate" ] && echo "$candidate" && return
+  done
+  return 1
+}
+
 if [ "$AUTH" = "playwright" ]; then
   log "minting a cookie with playwright (cross-platform path)"
-  BUN_BIN="$(command -v bun || echo "$HOME/.bun/bin/bun")"
+  BUN_BIN="$(resolve_bun)" || { log "no bun binary found"; exit 127; }
   rm -f "$COOKIE"
   if ! "$BUN_BIN" run "$ENGINE_DIR/scripts/auth-session.ts" "$COOKIE"; then
     log "playwright auth failed -- run: HEADED=1 bun run scripts/auth-session.ts /tmp/c.txt"
@@ -90,8 +104,7 @@ fi
 log "cookie refreshed ($(wc -c < "$COOKIE" | tr -d ' ') bytes); sweeping the directory"
 cd "$ENGINE_DIR" || { log "no engine at $ENGINE_DIR"; exit 1; }
 
-# `bun` is not on launchd's PATH, so it is resolved rather than assumed.
-BUN="$(command -v bun || echo "$HOME/.bun/bin/bun")"
+BUN="$(resolve_bun)" || { log "no bun binary found on this machine"; exit 127; }
 # Depth 1, deliberately. Measured: ~6,300 requests over ~18 minutes, finding
 # 24 new people on a first unattended run. The default depth of 4 searches far
 # more name permutations for the same population -- many times the load on
