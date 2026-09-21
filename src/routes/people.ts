@@ -7,6 +7,7 @@ import { geographyLeaderboard, scheduleGeography } from "../model/geography";
 import { guessFor } from "../model/guess";
 import { locationNow, scheduleFor } from "../model/schedule";
 import { availabilityFor } from "../model/availability";
+import { fitFor } from "../model/fit";
 import { twinSchedulesFor } from "../model/twins";
 import { locate } from "../store/campus";
 import { booklistTimeline, personTimeline } from "../store/history";
@@ -215,6 +216,30 @@ export const peopleRoutes: RouteDef[] = [
           num(url, "minMinutes") ?? 30,
           q(url, "term"),
         ),
+      );
+    },
+  },
+  {
+    method: "GET",
+    path: "/v1/people/:id/fit",
+    tag: "people",
+    summary:
+      "Whether each section of a course would fit this student's week -- including whether the walk is possible",
+    query: [
+      { name: "code", description: "Course code, e.g. GBIO-1000", required: true },
+      { name: "term", description: "Term code. Defaults to the current one." },
+      { name: "openOnly", description: "Only sections with seats left. Default true." },
+    ],
+    handler: (request, url) => {
+      const id = request.params.id ?? "";
+      if (!personById(id)) throw notFound("no such person");
+      const code = q(url, "code");
+      if (!code) throw badRequest("code is required");
+      return json(
+        fitFor(id, code, {
+          term: q(url, "term"),
+          openOnly: bool(url, "openOnly") ?? true,
+        }),
       );
     },
   },

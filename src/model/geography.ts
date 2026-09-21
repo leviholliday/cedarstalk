@@ -15,7 +15,7 @@ import { fingerprints } from "../store/harvest";
 import { personById } from "../store/people";
 import { guessAll } from "./guess";
 import { minutesOfDay } from "./meetings";
-import { scheduleFor } from "./schedule";
+import { type Block, scheduleFor } from "./schedule";
 
 /** Matches the walking speed `routes/campus.ts` already assumes for /v1/campus/route. */
 const WALK_METRES_PER_SECOND = 1.35;
@@ -53,12 +53,63 @@ export interface ScheduleGeography {
 }
 
 /** One student's week, scored for how far the schedule itself makes them walk. */
+/**
+ * The walks one day's blocks imply, with a routed time for each.
+ *
+ * Pulled out of `scheduleGeography` unchanged so that `model/fit.ts` can ask
+ * the same question of a *hypothetical* day -- an existing timetable plus a
+ * section someone is thinking about registering for. Two copies of this would
+ * drift, and the whole value of the fit check is that it agrees exactly with
+ * what the geography route already reports.
+ */
+export function walkTransitions(blocks: Block[], day: number): Transition[] {
+  const map = campusMap();
+  const adjacency = map ? adjacencyOf(map) : null;
+  const ordered = [...blocks].sort((a, b) => a.start.localeCompare(b.start));
+  const transitions: Transition[] = [];
+
+  for (let i = 1; i < ordered.length; i++) {
+    const prev = ordered[i - 1]!;
+    const next = ordered[i]!;
+    // Same building, or one leg has no room on record: nothing to route.
+    if (!prev.building || !next.building || prev.building === next.building) continue;
+
+    const gapMinutes = (minutesOfDay(next.start) ?? 0) - (minutesOfDay(prev.end) ?? 0);
+    let walkMetres: number | null = null;
+    let walkMinutes: number | null = null;
+    let possible: boolean | null = null;
+
+    if (map && adjacency) {
+      const from = buildingByLabel(prev.building);
+      const to = buildingByLabel(next.building);
+      if (from?.node != null && to?.node != null) {
+        const path = shortestPath(map, from.node, to.node, adjacency);
+        if (path) {
+          walkMetres = path.metres;
+          walkMinutes = Math.round((path.metres / WALK_METRES_PER_SECOND / 60) * 10) / 10;
+          possible = walkMinutes <= gapMinutes;
+        }
+      }
+    }
+
+    transitions.push({
+      day,
+      from: prev.building,
+      to: next.building,
+      fromEnd: prev.end,
+      toStart: next.start,
+      gapMinutes,
+      walkMetres,
+      walkMinutes,
+      possible,
+    });
+  }
+  return transitions;
+}
+
 export function scheduleGeography(studentId: string, term?: string): ScheduleGeography | null {
   const schedule = scheduleFor(studentId, term);
   if (!schedule) return null;
-
-  const map = campusMap();
-  const adjacency = map ? adjacencyOf(map) : null;
 
   const days: DayGeography[] = [];
   let weeklyMetres = 0;
@@ -66,49 +117,16 @@ export function scheduleGeography(studentId: string, term?: string): ScheduleGeo
   const impossible: Transition[] = [];
 
   for (const day of schedule.week) {
-    const blocks = [...day.blocks].sort((a, b) => a.start.localeCompare(b.start));
-    const transitions: Transition[] = [];
+    const transitions = walkTransitions(day.blocks, day.day);
     let dayMetres = 0;
 
-    for (let i = 1; i < blocks.length; i++) {
-      const prev = blocks[i - 1]!;
-      const next = blocks[i]!;
-      // Same building, or one leg has no room on record: nothing to route.
-      if (!prev.building || !next.building || prev.building === next.building) continue;
-
-      const gapMinutes = (minutesOfDay(next.start) ?? 0) - (minutesOfDay(prev.end) ?? 0);
-      let walkMetres: number | null = null;
-      let walkMinutes: number | null = null;
-      let possible: boolean | null = null;
-
-      if (map && adjacency) {
-        const from = buildingByLabel(prev.building);
-        const to = buildingByLabel(next.building);
-        if (from?.node != null && to?.node != null) {
-          const path = shortestPath(map, from.node, to.node, adjacency);
-          if (path) {
-            walkMetres = path.metres;
-            walkMinutes = Math.round((path.metres / WALK_METRES_PER_SECOND / 60) * 10) / 10;
-            possible = walkMinutes <= gapMinutes;
-          }
-        }
-      }
-
-      const transition: Transition = {
-        day: day.day,
-        from: prev.building,
-        to: next.building,
-        fromEnd: prev.end,
-        toStart: next.start,
-        gapMinutes,
-        walkMetres,
-        walkMinutes,
-        possible,
-      };
-      transitions.push(transition);
-      if (walkMetres !== null) dayMetres += walkMetres;
-      if (possible === false) impossible.push(transition);
-      if (walkMinutes !== null && (worst === null || walkMinutes > (worst.walkMinutes ?? -1))) {
+    for (const transition of transitions) {
+      if (transition.walkMetres !== null) dayMetres += transition.walkMetres;
+      if (transition.possible === false) impossible.push(transition);
+      if (
+        transition.walkMinutes !== null &&
+        (worst === null || transition.walkMinutes > (worst.walkMinutes ?? -1))
+      ) {
         worst = transition;
       }
     }
