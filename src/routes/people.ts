@@ -7,6 +7,7 @@ import { geographyLeaderboard, scheduleGeography } from "../model/geography";
 import { guessFor } from "../model/guess";
 import { locationNow, scheduleFor } from "../model/schedule";
 import { availabilityFor } from "../model/availability";
+import { crossingsFor } from "../model/crossings";
 import { fitFor } from "../model/fit";
 import { twinSchedulesFor } from "../model/twins";
 import { locate } from "../store/campus";
@@ -241,6 +242,25 @@ export const peopleRoutes: RouteDef[] = [
           openOnly: bool(url, "openOnly") ?? true,
         }),
       );
+    },
+  },
+  {
+    method: "GET",
+    path: "/v1/people/:id/crossings",
+    tag: "people",
+    summary:
+      "Whether two people's walks would put them at the same graph node during an overlapping window",
+    query: [
+      { name: "with", description: "The other person's directory id", required: true },
+      { name: "term", description: "Term code. Defaults to the current one." },
+    ],
+    handler: (request, url) => {
+      const id = request.params.id ?? "";
+      if (!personById(id)) throw notFound("no such person");
+      const withId = q(url, "with");
+      if (!withId) throw badRequest("with is required");
+      if (!personById(withId)) throw notFound("no such person for with");
+      return json(crossingsFor(id, withId, q(url, "term")));
     },
   },
   {
