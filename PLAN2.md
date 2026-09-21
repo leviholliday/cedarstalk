@@ -1,5 +1,33 @@
 # cedarengine — plan 2
 
+## Status — 2026-09-20/21
+
+**Done:** A1 (`/v1/buildings/:name/who`), A2 (`/v1/people/free`), F1 course fit
+(`/v1/people/:id/fit`), F2 textbooks (`/v1/people/:id/books`,
+`/v1/books/:isbn/students`), B1 My Day, B2 Free Together, B3 Who's in This
+Building, C1 Faculty, C2 Dorms, G1 (both repos private on GitHub under
+leviholliday, `upstream` renamed off Kieran's, license and README credit
+intact, verified via fresh clone), G2 (`scripts/auth-session.ts`, cross-platform
+but not yet the default -- `AUTH=playwright` opts in), G4 (`/mobile`, verified
+at 375x812 in a real browser, README documents the Tailscale-only path).
+214 engine tests pass; both extension and engine typecheck clean.
+
+**A real bug the plan's own §0.6 caught:** the directory agent's bun-path
+fallback guessed `~/.bun/bin/bun`, which does not exist on this machine (bun
+is a Homebrew install). First unattended run exited 127. Fixed in
+`scripts/headless-directory.sh` (`resolve_bun()`, checks Homebrew's two
+prefixes before the curl-installer default) and verified with a real
+`launchctl kickstart` -- exit 0.
+
+**Not done:** C3 (paths crossing -- the plan said do it last; still true),
+G3 (systemd timers -- Levi is on macOS, build when actually needed), Phase D
+(still gated: `booklist_events` holds only `kind=first` as of this session --
+check again after a second real harvest), Phase E, the dining forecast in §7.
+
+**Worth checking before doing more:** the booklists agent (`sh.dunkirk.
+cedarengine.booklists`, 03:30) has not had a real unattended run yet --
+`runs = 0` as of this session. Confirm it completes before trusting it.
+
 Everything in `PLAN.md` is built. This is the next round, written to be executed
 by someone who has not been part of the previous sessions.
 
