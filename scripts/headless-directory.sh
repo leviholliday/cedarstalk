@@ -26,11 +26,28 @@ COOKIE="$SUPPORT/headless-cookie.txt"
 
 log() { echo "$(date '+%Y-%m-%d %H:%M:%S')  $*"; }
 
-if [ ! -x "$BINARY" ]; then
-  log "no auth-browser at $BINARY -- open the Raycast command once to build it"
-  exit 3
+# Two ways to mint a cookie. The Swift helper is macOS-only but works today
+# with no setup; the Playwright one works anywhere but needs a single headed
+# sign-in first (HEADED=1 bun run scripts/auth-session.ts <file>). Swift stays
+# the default so that switching is a deliberate act rather than a surprise.
+AUTH="${AUTH:-swift}"
+
+if [ "$AUTH" = "playwright" ]; then
+  log "minting a cookie with playwright (cross-platform path)"
+  BUN_BIN="$(command -v bun || echo "$HOME/.bun/bin/bun")"
+  rm -f "$COOKIE"
+  if ! "$BUN_BIN" run "$ENGINE_DIR/scripts/auth-session.ts" "$COOKIE"; then
+    log "playwright auth failed -- run: HEADED=1 bun run scripts/auth-session.ts /tmp/c.txt"
+    exit 2
+  fi
+else
+  if [ ! -x "$BINARY" ]; then
+    log "no auth-browser at $BINARY -- open the Raycast command once to build it"
+    exit 3
+  fi
 fi
 
+if [ "$AUTH" = "swift" ]; then
 # macOS only grants window-server access to something Launch Services regards
 # as an app, so the binary is wrapped in a minimal bundle. Rebuilt every run:
 # it is a symlink and a plist, and a stale one is harder to debug than a fresh
@@ -62,9 +79,10 @@ install -m 600 /dev/null "$COOKIE"
 
 log "refreshing the session cookie"
 open -n -W "$BUNDLE" --args "$COOKIE" --jar "$JAR" --silent
+fi
 
 if [ ! -s "$COOKIE" ]; then
-  log "silent refresh produced no cookie -- SSO needs a human; sign in from Raycast once"
+  log "no cookie produced -- SSO needs a human; sign in from Raycast once"
   rm -f "$COOKIE"
   exit 2
 fi
