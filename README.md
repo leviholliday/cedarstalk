@@ -38,6 +38,19 @@ for each source. It also keeps history — every source upstream is a snapshot
 API, and who arrived, who left, who moved and who dropped a course only exists
 if you write it down each time you look.
 
+## The easy way
+
+1. Get a token and the download at [cedarstalk.netlify.app](https://cedarstalk.netlify.app), and unzip it.
+2. Double-click **`Start cedarstalk.command`** (Mac) or **`Start cedarstalk.cmd`** (Windows).
+   The first run installs [Bun](https://bun.sh) from its official installer and opens a setup page.
+3. Paste your token there. It walks you through loading the `extension` folder in Chrome or Edge,
+   which then connects itself and starts syncing. On a Mac the launcher also offers to add the
+   Raycast commands.
+
+Leave the launcher window open while you use it. The first time, macOS or Windows will warn that
+the launcher is from an unidentified developer: on a Mac, go to System Settings → Privacy & Security
+→ Open Anyway; on Windows, More info → Run anyway.
+
 ## Running it
 
 ```bash

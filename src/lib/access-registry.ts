@@ -108,13 +108,32 @@ interface CheckInResponse {
 async function callRegistry(
   deviceId: string,
   traffic?: { requests: number; windowMinutes: number },
+  token: string = config.bearerToken,
 ): Promise<CheckInResponse> {
   const res = await fetch(`${REGISTRY_URL}/.netlify/functions/check-in`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ token: config.bearerToken, deviceId, ...traffic }),
+    body: JSON.stringify({ token, deviceId, ...traffic }),
   });
   return res.json();
+}
+
+function accept(response: CheckInResponse): void {
+  writeCache();
+  status = { flagged: Boolean(response.flagged), message: response.message };
+  if (response.flagged) console.warn(`[access] ${response.message ?? "This token has been flagged."}`);
+  else console.log(`[access] validated with ${REGISTRY_URL}`);
+}
+
+/**
+ * For the /setup page: checks a token someone just pasted, without exiting
+ * on a bad one. Throws only when the registry cannot be reached at all.
+ */
+export async function checkToken(token: string): Promise<{ valid: boolean; reason?: string }> {
+  const response = await callRegistry(localDeviceId(), undefined, token);
+  if (!response.valid) return { valid: false, reason: response.reason };
+  accept(response);
+  return { valid: true };
 }
 
 /**
@@ -153,13 +172,7 @@ export async function requireValidToken(): Promise<void> {
     process.exit(1);
   }
 
-  writeCache();
-  status = { flagged: Boolean(response.flagged), message: response.message };
-  if (response.flagged) {
-    console.warn(`[access] ${response.message ?? "This token has been flagged."}`);
-  } else {
-    console.log(`[access] validated with ${REGISTRY_URL}`);
-  }
+  accept(response);
 }
 
 async function heartbeat(deviceId: string): Promise<void> {
