@@ -414,7 +414,13 @@
         try {
           const health = await api("/health");
           tabs.style.display = "flex";
+          // Only ever present on an instance run under a cedarengine-access
+          // token -- absent here means absent, no banner, nothing to render.
+          const banner = health.accessFlagged
+            ? `<div style="background:#3a1414;border:1px solid var(--red);border-radius:10px;padding:0.8rem 1rem;margin-bottom:1rem;color:var(--red);font-size:12.5px">${escape(health.accessMessage ?? "This token has been flagged.")}</div>`
+            : "";
           body.innerHTML = `
+            ${banner}
             <div class="panel active" id="panel-rooms"></div>
             <div class="panel" id="panel-people"></div>
             <div class="panel" id="panel-building"></div>`;

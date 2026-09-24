@@ -1,5 +1,6 @@
 /** Every route, in one array. The server and the spec both read from here. */
 
+import { accessStatus } from "../lib/access-registry";
 import { json } from "../lib/http";
 import { peopleStats } from "../store/people";
 import { campusRoutes } from "./campus";
@@ -25,11 +26,16 @@ const healthRoute: RouteDef = {
   open: true,
   handler: () => {
     const stats = peopleStats();
+    const access = accessStatus();
     return json({
       ok: true,
       uptimeSeconds: Math.round((Date.now() - started) / 1000),
       people: stats.people,
       lastSweep: stats.lastSweep,
+      // Only ever present for an instance running under a cedarengine-access
+      // token -- Levi's own instance never sets ACCESS_REGISTRY_URL, so
+      // accessStatus() stays { flagged: false } and this key is absent for him.
+      ...(access.flagged ? { accessFlagged: true, accessMessage: access.message } : {}),
     });
   },
 };
