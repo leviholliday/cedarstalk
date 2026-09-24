@@ -48,7 +48,7 @@ bun run dev                 # http://127.0.0.1:3000
 ```
 
 `BEARER_TOKEN` has to be one issued at
-[cedarstalk-access.netlify.app](https://cedarstalk-access.netlify.app) --
+[cedarstalk.netlify.app](https://cedarstalk.netlify.app) --
 see [Running your own copy](#running-your-own-copy). Every instance,
 including this one, validates against that registry before it will start at
 all; a self-generated string will not work.
@@ -223,7 +223,7 @@ in this repo, and nothing in it is shared by pointing another instance at his.
 The only thing distributed is the engine itself, empty, for you to fill with
 your own data from your own login.
 
-**1. Get a token.** [cedarstalk-access.netlify.app](https://cedarstalk-access.netlify.app)
+**1. Get a token.** [cedarstalk.netlify.app](https://cedarstalk.netlify.app)
 asks for your name, your `@cedarville.edu` email, and what you're running
 this on. It checks the email *looks like* a Cedarville address -- it does not
 send a verification email, because nobody's set up an account for that yet.

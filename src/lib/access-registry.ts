@@ -35,7 +35,7 @@ import { randomUUID } from "node:crypto";
 import { config } from "../config";
 import { analytics } from "./analytics";
 
-const REGISTRY_URL = "https://cedarstalk-access.netlify.app";
+const REGISTRY_URL = "https://cedarstalk.netlify.app";
 const HEARTBEAT_MINUTES = 30;
 const CACHE_TTL_DAYS = 7;
 
