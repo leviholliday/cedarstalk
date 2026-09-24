@@ -88,8 +88,14 @@
     <script>
       (function () {
         var done = function () { document.documentElement.classList.add("ready"); };
-        if (document.fonts && document.fonts.ready) document.fonts.ready.then(done);
-        else done();
+        // fonts.ready resolves before any download starts, so ask for each face explicitly.
+        if (document.fonts && document.fonts.load) {
+          Promise.all([
+            document.fonts.load('400 1em "JetBrains Mono"'),
+            document.fonts.load('700 1em "JetBrains Mono"'),
+            document.fonts.load('400 1em "Instrument Serif"'),
+          ]).then(done, done);
+        } else done();
         setTimeout(done, 1500);
       })();
     </script>
