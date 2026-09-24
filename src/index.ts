@@ -9,7 +9,7 @@
 
 import { serve } from "bun";
 import { version } from "../package.json";
-import { startAccessRegistry } from "./lib/access-registry";
+import { requireValidToken, startHeartbeat } from "./lib/access-registry";
 import { config } from "./config";
 import dashboard from "./dashboard.html";
 import { record, trim } from "./lib/analytics";
@@ -62,6 +62,11 @@ for (const route of routes) {
 
 const spec = openapi(routes, version);
 
+// Every instance validates before it binds a port at all -- see
+// lib/access-registry.ts for what this can and cannot actually enforce.
+// Exits the process on a real refusal; only returns on success.
+await requireValidToken();
+
 const server = serve({
   port: config.port,
   hostname: config.hostname,
@@ -88,6 +93,8 @@ if (config.hostname !== "127.0.0.1" && config.hostname !== "localhost") {
   console.log("  listening beyond loopback — the bearer token is the only thing in the way");
 }
 
-// A no-op for Levi's own instance, which was never issued a token through
-// the registry and never sets ACCESS_REGISTRY_URL. See lib/access-registry.ts.
-startAccessRegistry();
+// Routine check-ins while the server keeps running -- every 30 minutes,
+// reporting a bare request count so the registry can tell a real person's
+// use apart from a token quietly fronting something public. requireValidToken()
+// above already confirmed this instance is allowed to start at all.
+startHeartbeat();

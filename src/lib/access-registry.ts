@@ -1,25 +1,32 @@
 /**
- * Checking in with cedarengine-access, for anyone running their own copy
- * under a token issued by that registry.
+ * Every instance of this engine -- Levi's own included, registered under his
+ * real token the same as anyone else's -- validates against
+ * cedarengine-access before it will start. Not optional, and not something
+ * an env var can turn off: the registry address is a constant, not
+ * `ACCESS_REGISTRY_URL` read from `.env`, because a setting anyone could
+ * unset is not a requirement.
  *
- * Deliberately opt-in and off by default: this does nothing at all unless
- * `ACCESS_REGISTRY_URL` is set. Levi's own instance predates the registry
- * and was never issued a token through it, so it never sets this and this
- * module never runs anything for him. It only matters for someone who went
- * through cedarengine-access to get their own token.
+ * Worth being honest about what this can and cannot do. Anyone willing to
+ * read and edit this file can delete the check entirely -- nothing here can
+ * stop a determined person with the source in front of them, the same as
+ * any license check in any piece of software ever has been able to. What it
+ * does raise is the bar for casual redistribution: sharing a token is easy,
+ * quietly patching out a validation call most people distributing this
+ * won't think to look for is a different, higher bar.
  *
- * What it sends, once at startup and then every 30 minutes: the bearer
- * token, a random id generated once and kept in a local file (never real
- * hardware info), and a bare count of how many requests this instance
- * served in that window -- reusing the same request-analytics table the
- * dashboard already reads, never which endpoints or who was looked up. That
- * count is the one thing the registry can use to notice a token being used
- * far beyond what one person's own use looks like -- someone's own token
- * fronting a public web app for strangers reads nothing like a personal
- * Raycast habit.
+ * What it sends, once at startup and then every 30 minutes while the server
+ * runs: the bearer token, a random id generated once and kept in a local
+ * file (never real hardware info), and a bare count of how many requests
+ * this instance served in that window -- reusing the existing
+ * request-analytics table, never which endpoints or who was looked up.
  *
- * Fails open. A registry that is slow, unreachable, or simply not running
- * should never be the reason a collector refuses to start -- it only warns.
+ * A registry that is briefly unreachable should not be the reason someone's
+ * engine refuses to start -- but "briefly" is the operative word. The last
+ * successful validation is cached locally with a timestamp; a fresh cache
+ * (within CACHE_TTL_DAYS) lets startup proceed with a warning when the
+ * registry cannot be reached right now. No cache at all, a stale one, or an
+ * explicit "revoked" answer all refuse to start -- those are not network
+ * problems, they are the check doing its job.
  */
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -28,8 +35,12 @@ import { randomUUID } from "node:crypto";
 import { config } from "../config";
 import { analytics } from "./analytics";
 
-const DEVICE_ID_FILE = join(dirname(config.databasePath), ".device-id");
+const REGISTRY_URL = "https://cedarengine-access.netlify.app";
 const HEARTBEAT_MINUTES = 30;
+const CACHE_TTL_DAYS = 7;
+
+const DEVICE_ID_FILE = join(dirname(config.databasePath), ".device-id");
+const CACHE_FILE = join(dirname(config.databasePath), ".access-cache.json");
 
 export interface AccessStatus {
   flagged: boolean;
@@ -62,47 +73,120 @@ function localDeviceId(): string {
   return id;
 }
 
-async function heartbeat(registryUrl: string, deviceId: string): Promise<void> {
+function readCache(): { validatedAt: string } | null {
+  try {
+    return JSON.parse(readFileSync(CACHE_FILE, "utf-8"));
+  } catch {
+    return null;
+  }
+}
+
+function writeCache(): void {
+  try {
+    mkdirSync(dirname(CACHE_FILE), { recursive: true });
+    writeFileSync(CACHE_FILE, JSON.stringify({ validatedAt: new Date().toISOString() }));
+  } catch {
+    // Not fatal -- just means the next unreachable-registry case has nothing
+    // fresh to fall back on, same as if this were the very first run.
+  }
+}
+
+function cacheIsFresh(): boolean {
+  const cache = readCache();
+  if (!cache) return false;
+  const age = Date.now() - new Date(cache.validatedAt).getTime();
+  return age < CACHE_TTL_DAYS * 24 * 3_600_000;
+}
+
+interface CheckInResponse {
+  valid?: boolean;
+  reason?: string;
+  flagged?: boolean;
+  message?: string;
+}
+
+async function callRegistry(
+  deviceId: string,
+  traffic?: { requests: number; windowMinutes: number },
+): Promise<CheckInResponse> {
+  const res = await fetch(`${REGISTRY_URL}/.netlify/functions/check-in`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ token: config.bearerToken, deviceId, ...traffic }),
+  });
+  return res.json();
+}
+
+/**
+ * Called once, before the server binds a port or the CLI does anything else.
+ * Exits the process on a real refusal -- an unknown or revoked token, or an
+ * unreachable registry with no fresh cache to fall back on. Never exits for
+ * being merely flagged; that is a softer signal, meant to be reviewed and
+ * possibly reversed, not a kill switch.
+ */
+export async function requireValidToken(): Promise<void> {
+  const deviceId = localDeviceId();
+
+  let response: CheckInResponse;
+  try {
+    response = await callRegistry(deviceId);
+  } catch (error) {
+    if (cacheIsFresh()) {
+      console.warn(
+        `[access] could not reach ${REGISTRY_URL} to validate -- continuing on a cached check from within the last ${CACHE_TTL_DAYS} days.`,
+      );
+      return;
+    }
+    console.error(
+      `[access] could not reach ${REGISTRY_URL} to validate this token, and there is no recent successful ` +
+        `check to fall back on: ${(error as Error).message}`,
+    );
+    console.error("[access] refusing to start. Try again once the registry is reachable.");
+    process.exit(1);
+  }
+
+  if (!response.valid) {
+    console.error(
+      `[access] ${REGISTRY_URL} says this token is not valid (${response.reason ?? "unknown reason"}).`,
+    );
+    console.error("[access] refusing to start. Check with whoever issued the token.");
+    process.exit(1);
+  }
+
+  writeCache();
+  status = { flagged: Boolean(response.flagged), message: response.message };
+  if (response.flagged) {
+    console.warn(`[access] ${response.message ?? "This token has been flagged."}`);
+  } else {
+    console.log(`[access] validated with ${REGISTRY_URL}`);
+  }
+}
+
+async function heartbeat(deviceId: string): Promise<void> {
   const windowMinutes = Math.round((Date.now() - lastHeartbeatAt) / 60_000) || HEARTBEAT_MINUTES;
   const requests = analytics(windowMinutes / 60).total;
   lastHeartbeatAt = Date.now();
 
   try {
-    const res = await fetch(`${registryUrl.replace(/\/$/, "")}/.netlify/functions/check-in`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ token: config.bearerToken, deviceId, requests, windowMinutes }),
-    });
-    const body = (await res.json()) as { valid?: boolean; reason?: string; flagged?: boolean; message?: string };
-
-    if (!body.valid) {
+    const response = await callRegistry(deviceId, { requests, windowMinutes });
+    if (!response.valid) {
       status = { flagged: false };
       console.warn(
-        `[access] ${registryUrl} says this token is not valid (${body.reason ?? "unknown reason"}). ` +
-          "This engine will keep running, but you may have lost access -- check with whoever issued the token.",
+        `[access] ${REGISTRY_URL} says this token is no longer valid (${response.reason ?? "unknown reason"}). ` +
+          "This instance will keep running for now, but check with whoever issued the token.",
       );
       return;
     }
-
-    status = { flagged: Boolean(body.flagged), message: body.message };
-    if (body.flagged) {
-      console.warn(`[access] ${body.message ?? "This token has been flagged."}`);
-    } else {
-      console.log(`[access] checked in with ${registryUrl} — token is valid (${requests} requests this window)`);
-    }
+    writeCache();
+    status = { flagged: Boolean(response.flagged), message: response.message };
+    if (response.flagged) console.warn(`[access] ${response.message ?? "This token has been flagged."}`);
   } catch (error) {
-    console.warn(
-      `[access] could not reach ${registryUrl} to check in -- continuing anyway: ${(error as Error).message}`,
-    );
+    console.warn(`[access] could not reach ${REGISTRY_URL} for a routine check-in: ${(error as Error).message}`);
   }
 }
 
-/** Called once at startup. A no-op unless ACCESS_REGISTRY_URL is set. */
-export function startAccessRegistry(): void {
-  const registryUrl = process.env.ACCESS_REGISTRY_URL;
-  if (!registryUrl) return;
-
+/** Call after requireValidToken() succeeds, for the long-running server only -- the CLI exits before 30 minutes pass. */
+export function startHeartbeat(): void {
   const deviceId = localDeviceId();
-  heartbeat(registryUrl, deviceId);
-  setInterval(() => heartbeat(registryUrl, deviceId), HEARTBEAT_MINUTES * 60_000).unref();
+  setInterval(() => heartbeat(deviceId), HEARTBEAT_MINUTES * 60_000).unref();
 }

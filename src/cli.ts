@@ -31,6 +31,7 @@ import { guessAll, guessFor } from "./model/guess";
 import { forgetModel } from "./model/major";
 import { rebuildOccupancy } from "./model/occupancy";
 import { buildings } from "./store/campus";
+import { requireValidToken } from "./lib/access-registry";
 import { termStats } from "./store/catalog";
 import { harvestTerms } from "./store/harvest";
 import { recentSweeps } from "./store/history";
@@ -175,6 +176,10 @@ async function collect(what: string | undefined): Promise<void> {
 }
 
 async function main(): Promise<void> {
+  // Bare `engine` with no command just prints usage below -- that stays
+  // available offline. Any real command validates first.
+  if (positional[0]) await requireValidToken();
+
   switch (positional[0]) {
     case "import": {
       const report = importAll({

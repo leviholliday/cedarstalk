@@ -37,10 +37,16 @@ if you write it down each time you look.
 
 ```bash
 bun install
-cp .env.example .env        # fill in BEARER_TOKEN: openssl rand -hex 32
+cp .env.example .env        # fill in BEARER_TOKEN -- see below, it has to come from the registry
 bun run engine import       # seed from the older projects, if they are checked out beside this
 bun run dev                 # http://127.0.0.1:3000
 ```
+
+`BEARER_TOKEN` has to be one issued at
+[cedarengine-access.netlify.app](https://cedarengine-access.netlify.app) --
+see [Running your own copy](#running-your-own-copy). Every instance,
+including this one, validates against that registry before it will start at
+all; a self-generated string will not work.
 
 The dashboard is at `/`, the spec at `/openapi.json`, and every other route
 wants `Authorization: Bearer <token>`. It binds loopback unless you tell it
@@ -220,6 +226,14 @@ The real gate is downstream: the token is only useful for an engine that
 itself needs a genuine Cedarville Self-Service login to collect anything, so
 a fake email gets you a token and nothing else.
 
+This step is not optional. Every instance of this engine -- Levi's own
+included, registered the same way as anyone else's -- validates its token
+against that registry before it will start at all, and every 30 minutes
+after that while it runs. A self-generated `BEARER_TOKEN` will not work; see
+[`src/lib/access-registry.ts`](src/lib/access-registry.ts) for exactly what
+gets sent (a bare request count, never which endpoints or who was looked up)
+and what a brief registry outage does and does not block.
+
 **2. Set it up.**
 
 ```bash
@@ -229,11 +243,10 @@ bun install
 cp .env.example .env
 ```
 
-In `.env`, paste the token you were issued as `BEARER_TOKEN`, and set
-`ACCESS_REGISTRY_URL=https://cedarengine-access.netlify.app` so the engine
-checks in once at startup -- that's what lets the registry show whether your
-token is still valid, and it's the only thing this engine ever sends there:
-the token itself and a random id, never anything about you or Cedarville.
+Paste the token you were issued as `BEARER_TOKEN` in `.env`. Nothing else to
+configure -- the registry address is fixed in the engine itself, not an
+environment variable, so there is nowhere to point it somewhere else or leave
+it unset.
 
 **3. Sign into Self-Service once, then collect.**
 
