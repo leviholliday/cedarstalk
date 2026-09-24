@@ -4,6 +4,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>cedarstalk setup</title>
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="./favicon-32.png" sizes="32x32" type="image/png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -19,7 +21,7 @@
       body {
         background: var(--bg); color: var(--ink); overflow-x: hidden; min-height: 100vh;
         font: 14px/1.6 "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
-        display: grid; place-items: center; padding: 2rem 1rem;
+        display: grid; justify-items: center; align-items: start; padding: max(2rem, 12vh) 1rem 3rem;
       }
       .blobs { position: fixed; inset: 0; z-index: 0; overflow: hidden; filter: blur(70px); }
       .blob { position: absolute; border-radius: 50%; opacity: 0.5; animation: drift 18s ease-in-out infinite alternate; }
