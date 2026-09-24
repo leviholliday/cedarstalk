@@ -205,6 +205,63 @@ Also useful: an iOS Shortcut can call the API directly over the same tailnet
 (`GET /v1/people/:id/location/now` with the bearer token in the header) for a
 one-tap Home Screen button, no browser needed.
 
+## Running your own copy
+
+This is Levi's private fork, and `data/` never leaves his machine -- it isn't
+in this repo, and nothing in it is shared by pointing another instance at his.
+The only thing distributed is the engine itself, empty, for you to fill with
+your own data from your own login.
+
+**1. Get a token.** [cedarengine-access.netlify.app](https://cedarengine-access.netlify.app)
+asks for your name, your `@cedarville.edu` email, and what you're running
+this on. It checks the email *looks like* a Cedarville address -- it does not
+send a verification email, because nobody's set up an account for that yet.
+The real gate is downstream: the token is only useful for an engine that
+itself needs a genuine Cedarville Self-Service login to collect anything, so
+a fake email gets you a token and nothing else.
+
+**2. Set it up.**
+
+```bash
+git clone https://github.com/leviholliday/cedarengine.git
+cd cedarengine
+bun install
+cp .env.example .env
+```
+
+In `.env`, paste the token you were issued as `BEARER_TOKEN`, and set
+`ACCESS_REGISTRY_URL=https://cedarengine-access.netlify.app` so the engine
+checks in once at startup -- that's what lets the registry show whether your
+token is still valid, and it's the only thing this engine ever sends there:
+the token itself and a random id, never anything about you or Cedarville.
+
+**3. Sign into Self-Service once, then collect.**
+
+```bash
+bun run engine collect directory --refresh   # first sweep, from scratch
+bun run engine collect catalog               # this term's course catalog
+bun run dev                                  # http://127.0.0.1:3000
+```
+
+The directory sweep opens a real browser window for you to sign in through
+Cedarville's SSO. After that it can run unattended -- see
+[Collecting](#collecting) below for the headless path once you're set up.
+
+**Windows.** The headless directory sweep
+(`scripts/headless-directory.sh`) defaults to a Swift helper that only
+compiles on macOS. On Windows, use the cross-platform path instead:
+
+```bash
+bun run scripts/auth-session.ts <cookie-file>   # first run: pass HEADED=1 and sign in
+bun run engine collect directory --cookie <cookie-file>
+```
+
+The Raycast extension is Mac-only regardless -- it depends on the same Swift
+helper for its own sign-in, and Raycast for Windows wouldn't offer to install
+it anyway (`platforms: ["macOS"]` in its manifest). `/` and `/mobile` (see
+[On your phone](#on-your-phone)) work in any browser and are the real answer
+for Windows and Linux both.
+
 ## Hosting
 
 Same as everything else I run: a systemd user service and a Caddy entry.

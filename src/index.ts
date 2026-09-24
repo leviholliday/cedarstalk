@@ -9,6 +9,7 @@
 
 import { serve } from "bun";
 import { version } from "../package.json";
+import { checkInWithRegistry } from "./lib/access-registry";
 import { config } from "./config";
 import dashboard from "./dashboard.html";
 import { record, trim } from "./lib/analytics";
@@ -86,3 +87,7 @@ if (trimmed) console.log(`  trimmed ${trimmed} old request rows`);
 if (config.hostname !== "127.0.0.1" && config.hostname !== "localhost") {
   console.log("  listening beyond loopback — the bearer token is the only thing in the way");
 }
+
+// A no-op for Levi's own instance, which was never issued a token through
+// the registry and never sets ACCESS_REGISTRY_URL. See lib/access-registry.ts.
+checkInWithRegistry();
