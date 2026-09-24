@@ -1,5 +1,5 @@
 /**
- * Every instance of this engine -- Levi's own included, registered under his
+ * Every instance of this engine -- the maintainer's own included, registered under their
  * real token the same as anyone else's -- validates against
  * cedarstalk-access before it will start. Not optional, and not something
  * an env var can turn off: the registry address is a constant, not

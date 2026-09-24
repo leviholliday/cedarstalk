@@ -32,9 +32,7 @@ const healthRoute: RouteDef = {
       uptimeSeconds: Math.round((Date.now() - started) / 1000),
       people: stats.people,
       lastSweep: stats.lastSweep,
-      // Only ever present for an instance running under a cedarstalk-access
-      // token -- Levi's own instance never sets ACCESS_REGISTRY_URL, so
-      // accessStatus() stays { flagged: false } and this key is absent for him.
+      // Only present when the registry has flagged this instance's token.
       ...(access.flagged ? { accessFlagged: true, accessMessage: access.message } : {}),
     });
   },

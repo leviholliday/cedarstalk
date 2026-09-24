@@ -20,7 +20,7 @@ prefixes before the curl-installer default) and verified with a real
 `launchctl kickstart` -- exit 0.
 
 **Not done:** C3 (paths crossing -- the plan said do it last; still true),
-G3 (systemd timers -- Levi is on macOS, build when actually needed), Phase D
+G3 (systemd timers -- this fork runs on macOS, build when actually needed), Phase D
 (still gated: `booklist_events` holds only `kind=first` as of this session --
 check again after a second real harvest), Phase E, the dining forecast in §7.
 

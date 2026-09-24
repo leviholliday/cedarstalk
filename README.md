@@ -4,11 +4,16 @@ One database and one API over everything I have collected about Cedarville: the
 student directory, the course catalog, the printed academic catalog, harvested
 booklists, and the campus itself.
 
-The canonical repo for this is hosted on tangled over at [`https://tangled.org/dunkirk.sh/cedarengine`](https://tangled.org/dunkirk.sh/cedarengine)
+> **cedarstalk is a fork of [cedarengine](https://tangled.org/dunkirk.sh/cedarengine)
+> by [Kieran Klukas](https://dunkirk.sh).** The engine, the data model, the
+> collectors it started with, and the write-up below are his work. The
+> canonical repo lives on tangled at
+> [`tangled.org/dunkirk.sh/cedarengine`](https://tangled.org/dunkirk.sh/cedarengine).
 
-This particular copy is Levi Holliday's fork, built out for Cedarville
-University specifically -- new collectors, routes and a Raycast extension on
-top of Kieran's original engine and data model. Same MIT license, unchanged.
+The changes in this fork -- the rename, the access registry, extra routes,
+the mobile page and the Raycast extension -- were made with
+[Claude](https://claude.com/claude-code). Same MIT license, unchanged, still
+Kieran's copyright.
 
 <p align="center">
     <img src="https://raw.githubusercontent.com/taciturnaxolotl/carriage/main/.github/images/line-break-thin.svg" />
@@ -213,7 +218,7 @@ one-tap Home Screen button, no browser needed.
 
 ## Running your own copy
 
-This is Levi's fork, and `data/` never leaves his machine -- it isn't
+`data/` never leaves the machine it was collected on -- it isn't
 in this repo, and nothing in it is shared by pointing another instance at his.
 The only thing distributed is the engine itself, empty, for you to fill with
 your own data from your own login.
@@ -226,7 +231,7 @@ The real gate is downstream: the token is only useful for an engine that
 itself needs a genuine Cedarville Self-Service login to collect anything, so
 a fake email gets you a token and nothing else.
 
-This step is not optional. Every instance of this engine -- Levi's own
+This step is not optional. Every instance of this engine -- the maintainer's own
 included, registered the same way as anyone else's -- validates its token
 against that registry before it will start at all, and every 30 minutes
 after that while it runs. A self-generated `BEARER_TOKEN` will not work; see
@@ -286,8 +291,8 @@ systemctl --user enable --now cedarstalk
 ```
 
 ```caddy
-http://cedarstalk.dunkirk.sh {
-        bind unix/.cedarstalk.dunkirk.sh.webserver.sock|777
+http://cedarengine.dunkirk.sh {
+        bind unix/.cedarengine.dunkirk.sh.webserver.sock|777
         reverse_proxy :38455
 }
 ```
