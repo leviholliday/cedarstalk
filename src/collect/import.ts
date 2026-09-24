@@ -1,7 +1,7 @@
 /**
  * Bringing in what the earlier projects already collected.
  *
- * cedarengine replaces four tools that each kept their own file, and a fresh
+ * cedarstalk replaces four tools that each kept their own file, and a fresh
  * engine that starts empty throws away a directory sweep, three thousand
  * courses, a whole printed catalog and a term of harvested booklists. So the
  * first run imports them, and the sweeps table records that it happened.

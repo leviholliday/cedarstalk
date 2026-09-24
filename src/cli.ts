@@ -387,7 +387,7 @@ async function main(): Promise<void> {
     default:
       console.error(
         [
-          "cedarengine",
+          "cedarstalk",
           "",
           "  import                      seed from the older projects",
           "  collect directory           sweep the directory (needs a session)",

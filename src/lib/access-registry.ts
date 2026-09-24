@@ -1,7 +1,7 @@
 /**
  * Every instance of this engine -- Levi's own included, registered under his
  * real token the same as anyone else's -- validates against
- * cedarengine-access before it will start. Not optional, and not something
+ * cedarstalk-access before it will start. Not optional, and not something
  * an env var can turn off: the registry address is a constant, not
  * `ACCESS_REGISTRY_URL` read from `.env`, because a setting anyone could
  * unset is not a requirement.
@@ -35,7 +35,7 @@ import { randomUUID } from "node:crypto";
 import { config } from "../config";
 import { analytics } from "./analytics";
 
-const REGISTRY_URL = "https://cedarengine-access.netlify.app";
+const REGISTRY_URL = "https://cedarstalk-access.netlify.app";
 const HEARTBEAT_MINUTES = 30;
 const CACHE_TTL_DAYS = 7;
 

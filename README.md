@@ -1,4 +1,4 @@
-# cedarengine
+# cedarstalk
 
 One database and one API over everything I have collected about Cedarville: the
 student directory, the course catalog, the printed academic catalog, harvested
@@ -6,7 +6,7 @@ booklists, and the campus itself.
 
 The canonical repo for this is hosted on tangled over at [`https://tangled.org/dunkirk.sh/cedarengine`](https://tangled.org/dunkirk.sh/cedarengine)
 
-This particular copy is Levi Holliday's private fork, built out for Cedarville
+This particular copy is Levi Holliday's fork, built out for Cedarville
 University specifically -- new collectors, routes and a Raycast extension on
 top of Kieran's original engine and data model. Same MIT license, unchanged.
 
@@ -43,7 +43,7 @@ bun run dev                 # http://127.0.0.1:3000
 ```
 
 `BEARER_TOKEN` has to be one issued at
-[cedarengine-access.netlify.app](https://cedarengine-access.netlify.app) --
+[cedarstalk-access.netlify.app](https://cedarstalk-access.netlify.app) --
 see [Running your own copy](#running-your-own-copy). Every instance,
 including this one, validates against that registry before it will start at
 all; a self-generated string will not work.
@@ -213,12 +213,12 @@ one-tap Home Screen button, no browser needed.
 
 ## Running your own copy
 
-This is Levi's private fork, and `data/` never leaves his machine -- it isn't
+This is Levi's fork, and `data/` never leaves his machine -- it isn't
 in this repo, and nothing in it is shared by pointing another instance at his.
 The only thing distributed is the engine itself, empty, for you to fill with
 your own data from your own login.
 
-**1. Get a token.** [cedarengine-access.netlify.app](https://cedarengine-access.netlify.app)
+**1. Get a token.** [cedarstalk-access.netlify.app](https://cedarstalk-access.netlify.app)
 asks for your name, your `@cedarville.edu` email, and what you're running
 this on. It checks the email *looks like* a Cedarville address -- it does not
 send a verification email, because nobody's set up an account for that yet.
@@ -237,8 +237,8 @@ and what a brief registry outage does and does not block.
 **2. Set it up.**
 
 ```bash
-git clone https://github.com/leviholliday/cedarengine.git
-cd cedarengine
+git clone https://github.com/leviholliday/cedarstalk.git
+cd cedarstalk
 bun install
 cp .env.example .env
 ```
@@ -281,13 +281,13 @@ Same as everything else I run: a systemd user service and a Caddy entry.
 
 ```bash
 bun run build                       # -> dist/cedarengine
-cp cedarengine.service ~/.config/systemd/user/
-systemctl --user enable --now cedarengine
+cp cedarstalk.service ~/.config/systemd/user/
+systemctl --user enable --now cedarstalk
 ```
 
 ```caddy
-http://cedarengine.dunkirk.sh {
-        bind unix/.cedarengine.dunkirk.sh.webserver.sock|777
+http://cedarstalk.dunkirk.sh {
+        bind unix/.cedarstalk.dunkirk.sh.webserver.sock|777
         reverse_proxy :38455
 }
 ```

@@ -56,7 +56,7 @@ export function openapi(routes: RouteDef[], version: string) {
   return {
     openapi: "3.1.0",
     info: {
-      title: "cedarengine",
+      title: "cedarstalk",
       version,
       description:
         "One API over the Cedarville directory, course catalog, printed book, harvested booklists and the campus map.",

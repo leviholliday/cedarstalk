@@ -86,7 +86,7 @@ const server = serve({
 // the trim costs nothing, so it happens at boot rather than on a schedule.
 const trimmed = trim();
 
-console.log(`cedarengine ${version} on http://${server.hostname}:${server.port}`);
+console.log(`cedarstalk ${version} on http://${server.hostname}:${server.port}`);
 console.log(`  ${routes.length} routes  ·  ${config.databasePath}`);
 if (trimmed) console.log(`  trimmed ${trimmed} old request rows`);
 if (config.hostname !== "127.0.0.1" && config.hostname !== "localhost") {
