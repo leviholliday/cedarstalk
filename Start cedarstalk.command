@@ -21,8 +21,8 @@ if [ ! -f data/.raycast-asked ]; then
   bash scripts/install-raycast.sh "$BUN" --ask
 fi
 
-if [ ! -f data/.shortcut-made ]; then
-  mkdir -p data && touch data/.shortcut-made
+if [ ! -f data/.shortcut-v2 ]; then
+  mkdir -p data && touch data/.shortcut-v2
   bash scripts/make-mac-app.sh || true
 fi
 

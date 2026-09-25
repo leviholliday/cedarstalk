@@ -1,7 +1,8 @@
 #!/bin/bash
 # Makes ~/Applications/cedarstalk.app (with the cedarstalk icon) and puts it on
 # the Desktop. Called once by "Start cedarstalk.command". If cedarstalk is
-# already running it just opens a window; otherwise it starts it in Terminal.
+# already running it just opens a window; otherwise it starts it in the
+# background (no Terminal), logging to data/server.log.
 set -e
 APPDIR="$(cd "$(dirname "$0")/.." && pwd)"
 BUNDLE="$HOME/Applications/cedarstalk.app"
@@ -30,7 +31,11 @@ for port in $(seq 3000 3009); do
     exit 0
   fi
 done
-open -a Terminal "$DIR/Start cedarstalk.command"
+# Opened from Finder, PATH is bare -- look where Bun actually installs.
+for BUN in "$HOME/.bun/bin/bun" /opt/homebrew/bin/bun /usr/local/bin/bun; do [ -x "$BUN" ] && break; done
+[ -x "$BUN" ] || { open -a Terminal "$DIR/Start cedarstalk.command"; exit 0; }
+cd "$DIR" && mkdir -p data
+CEDARSTALK_OPEN=1 nohup "$BUN" run src/index.ts >> data/server.log 2>&1 &
 RUN
 } > "$BUNDLE/Contents/MacOS/cedarstalk"
 chmod +x "$BUNDLE/Contents/MacOS/cedarstalk"

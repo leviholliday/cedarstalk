@@ -27,9 +27,9 @@ if not exist "data\.raycast-asked" (
   powershell -NoProfile -ExecutionPolicy Bypass -File "scripts\install-raycast.ps1" -Bun "%BUN%" -Ask
 )
 
-if not exist "data\.shortcut-made" (
+if not exist "data\.shortcut-v2" (
   if not exist data mkdir data
-  type nul > "data\.shortcut-made"
+  type nul > "data\.shortcut-v2"
   powershell -NoProfile -ExecutionPolicy Bypass -File "scripts\make-shortcut.ps1"
 )
 
