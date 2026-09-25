@@ -1,14 +1,50 @@
-# Installs the cedarstalk Raycast commands on Windows. Called by "Start cedarstalk.cmd";
-# needs only Bun -- a node.exe copy of Bun covers Raycast's own tooling.
-param([string]$Bun = "bun")
+# Installs the cedarstalk Raycast commands on Windows -- and Raycast itself if it's missing.
+# Needs only Bun: a node.exe copy of Bun covers Raycast's own tooling.
+#   install-raycast.ps1 -Bun <path> [-Ask]    -Ask: the launcher's one-time question
+param([string]$Bun = "bun", [switch]$Ask)
 $ErrorActionPreference = "Stop"
+$ProgressPreference = "SilentlyContinue"
 $root = Join-Path $env:USERPROFILE ".cedarstalk"
 $dir  = Join-Path $root "raycast"
 $shim = Join-Path $root "shim"
+$storeId = "9PFXXSHC64H3"   # Raycast on the Microsoft Store, published by Raycast Technologies Ltd.
+
+function Test-Raycast {
+  if (Get-AppxPackage -Name "*Raycast*" -ErrorAction SilentlyContinue) { return $true }
+  return (Test-Path (Join-Path $env:LOCALAPPDATA "Programs\Raycast"))
+}
+
+function Start-Raycast {
+  $app = Get-StartApps | Where-Object { $_.Name -like "Raycast*" } | Select-Object -First 1
+  if ($app) { Start-Process "explorer.exe" "shell:AppsFolder\$($app.AppID)" }
+}
+
+function Install-Raycast {
+  if (Get-Command winget -ErrorAction SilentlyContinue) {
+    Write-Host "  Installing Raycast from the Microsoft Store (this accepts the Store's and Raycast's terms)..."
+    winget install --id $storeId --source msstore --accept-package-agreements --accept-source-agreements --silent | Out-Null
+  }
+  if (-not (Test-Raycast)) {
+    Write-Host "  Opening Raycast in the Microsoft Store -- click Get, wait for it to install."
+    Start-Process "ms-windows-store://pdp/?productid=$storeId"
+    Read-Host "  Press Enter here once Raycast is installed" | Out-Null
+  }
+  if (-not (Test-Raycast)) { throw "Raycast didn't install." }
+  Start-Raycast
+  Read-Host "  Raycast just opened -- click through its welcome screens, then press Enter here" | Out-Null
+}
+
 try {
+  if (Test-Raycast) {
+    if ($Ask -and (Read-Host "  Add the cedarstalk commands to Raycast? [Y/n]") -match "^[nN]") { exit 0 }
+  } else {
+    if ($Ask -and (Read-Host "  Want Raycast too? It's a free launcher app, and cedarstalk adds its commands to it. [y/N]") -notmatch "^[yY]") { exit 0 }
+    Install-Raycast
+  }
+
   if (-not (Test-Path $Bun)) { $Bun = (Get-Command $Bun).Source }
 
-  Write-Host "  Downloading the Raycast commands..."
+  Write-Host "  Downloading the cedarstalk Raycast commands..."
   $zip = Join-Path $env:TEMP "cedarstalk-raycast.zip"
   $tmp = Join-Path $root "raycast-tmp"
   Invoke-WebRequest "https://github.com/leviholliday/cedarstalk-raycast/archive/refs/heads/main.zip" -OutFile $zip -UseBasicParsing
@@ -26,6 +62,7 @@ try {
   Push-Location $dir
   & $Bun install | Out-Null
   Write-Host "  Adding them to Raycast (about 30 seconds)..."
+  Start-Raycast
   $dev = Start-Process -FilePath (Join-Path $shim "node.exe") `
     -ArgumentList "node_modules/@raycast/api/bin/run.js", "develop" -PassThru -WindowStyle Hidden
   Start-Sleep -Seconds 30

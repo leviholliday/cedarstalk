@@ -179,7 +179,7 @@
               <p id="extState">Then come back to this tab — it connects by itself.</p></div>
             ${raycast ? `<div class="step"><span class="dot">3</span><b>Raycast (optional)</b>
               <p>If you said yes in the launcher, it's installed. If not, double-click <code>${addFile}</code>
-              in the cedarstalk folder. Then open Raycast and run any cedarstalk command.
+              in the cedarstalk folder -- it installs Raycast too if you don't have it. Then open Raycast and run any cedarstalk command.
               It'll ask for your token once${port !== "3000" ? ` and the address <code>${escape(location.origin)}</code>` : ""}.</p>
               <p><button class="copy" id="copyTok">Copy token</button></p></div>` : ""}
             <div class="step"><span class="dot">${raycast ? 4 : 3}</span><b>Keep the launcher window open</b>

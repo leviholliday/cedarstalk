@@ -16,13 +16,9 @@ if [ -z "$BUN" ]; then
   BUN="$HOME/.bun/bin/bun"
 fi
 
-if [ -d /Applications/Raycast.app ] && [ ! -f data/.raycast-asked ]; then
+if [ ! -f data/.raycast-asked ]; then
   mkdir -p data && touch data/.raycast-asked
-  read -r -p "  Raycast is installed -- add the cedarstalk commands to it? [Y/n] " answer
-  case "$answer" in
-    [nN]*) ;;
-    *) bash scripts/install-raycast.sh "$BUN" ;;
-  esac
+  bash scripts/install-raycast.sh "$BUN" --ask
 fi
 
 CEDARSTALK_OPEN=1 "$BUN" run src/index.ts

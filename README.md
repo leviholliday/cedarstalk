@@ -51,7 +51,9 @@ Go to [cedarstalk.netlify.app](https://cedarstalk.netlify.app), download, and ge
 
 Then paste your token into the page that opens. It shows exactly which folder to load as the
 browser extension (which then connects itself and starts syncing), and the launcher offers to
-add the Raycast commands -- or double-click **Add to Raycast** later.
+add the Raycast commands, installing Raycast itself if you want it (the real, signed
+one from raycast.com on a Mac, the Microsoft Store one on Windows) -- or double-click
+**Add to Raycast** later.
 
 The first time, macOS or Windows warns the launcher is from an unidentified developer: on a Mac,
 System Settings → Privacy & Security → Open Anyway; on Windows, More info → Run anyway. Keep the

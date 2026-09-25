@@ -24,8 +24,7 @@ if not defined BUN (
 if not exist "data\.raycast-asked" (
   if not exist data mkdir data
   type nul > "data\.raycast-asked"
-  choice /c YN /n /m "  Do you use Raycast? Add the cedarstalk commands to it? [Y/N] "
-  if not errorlevel 2 powershell -NoProfile -ExecutionPolicy Bypass -File "scripts\install-raycast.ps1" -Bun "%BUN%"
+  powershell -NoProfile -ExecutionPolicy Bypass -File "scripts\install-raycast.ps1" -Bun "%BUN%" -Ask
 )
 
 set CEDARSTALK_OPEN=1
