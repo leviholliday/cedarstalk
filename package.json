@@ -1,6 +1,7 @@
 {
   "name": "cedarstalk",
   "version": "0.1.0",
+  "author": "Kieran Klukas (https://dunkirk.sh)",
   "private": true,
   "type": "module",
   "scripts": {

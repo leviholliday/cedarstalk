@@ -1,75 +1,326 @@
 # cedarstalk
 
-cedarstalk is a local-first Cedarville research tool: a Bun API, a SQLite
-database, and collectors for directory, course, campus, and booklist data.
+One database and one API over everything I have collected about Cedarville: the
+student directory, the course catalog, the printed academic catalog, harvested
+booklists, and the campus itself.
 
-It is intended for the maintainer's private use. It is **not** a public
-directory or hosted service. Do not publish a database, bearer token, browser
-profile, or endpoint that exposes collected data.
+> **All the credit goes to [Kieran Klukas](https://dunkirk.sh).** cedarstalk is
+> a fork of his [cedarengine](https://tangled.org/dunkirk.sh/cedarengine), and
+> everything that makes it work is his: the idea, the engine, the data model,
+> the collectors, the map, the major guessing, the history tracking, the
+> original Raycast extension, and every word of the write-up below. The
+> canonical repo lives on tangled at
+> [`tangled.org/dunkirk.sh/cedarengine`](https://tangled.org/dunkirk.sh/cedarengine)
+> -- go look at that one first.
 
-## What stays online
+This fork only renames it and adds packaging around it (the access registry,
+the launchers and setup page, a few extra routes, the mobile page), and those
+changes were made with [Claude](https://claude.com/claude-code). Same MIT
+license, unchanged, still Kieran's copyright.
 
-The small access registry at `cedarstalk.netlify.app` is online so approved
-copies can validate their access token. The engine and its database stay on
-your own machine. When remote access is needed, use Tailscale rather than
-opening a port to the public internet.
+<p align="center">
+    <img src="https://raw.githubusercontent.com/taciturnaxolotl/carriage/main/.github/images/line-break-thin.svg" />
+</p>
 
-## Run locally
+## What's this?
 
-Requirements: [Bun](https://bun.sh) and a valid `BEARER_TOKEN`.
+Four projects had four data files and none of them could see each other.
+`cedarstalk-raycast` swept the directory into `directory.db`.
+`the-cedarville-app` crawled Colleague and the printed catalog into
+`catalog.sqlite` and `book-2026-2027.json`. `cedar-major-pipeline` harvested
+campus-store booklists and guessed majors off them, reaching across to the
+other two by absolute path. `assassins` drew the campus off OpenStreetMap.
+
+Every question worth asking crosses at least two of those. Which dorm has the
+most engineers. Whether the person who moved into Lawlor over the summer
+changed majors too. How far a freshman actually walks in a day. Kept in four
+files those need application code; kept in one they need a `JOIN`.
+
+So this is one SQLite database, one Bun server in front of it, and collectors
+for each source. It also keeps history — every source upstream is a snapshot
+API, and who arrived, who left, who moved and who dropped a course only exists
+if you write it down each time you look.
+
+## The easy way
+
+1. Get a token and the download at [cedarstalk.netlify.app](https://cedarstalk.netlify.app), and unzip it.
+2. Double-click **`Start cedarstalk.command`** (Mac) or **`Start cedarstalk.cmd`** (Windows).
+   The first run installs [Bun](https://bun.sh) from its official installer and opens a setup page.
+3. Paste your token there. It walks you through loading the `extension` folder in Chrome or Edge,
+   which then connects itself and starts syncing. The launcher also offers to add the Raycast
+   commands (Mac or Windows); if you skip it, double-click `Add to Raycast` later.
+
+Leave the launcher window open while you use it. The first time, macOS or Windows will warn that
+the launcher is from an unidentified developer: on a Mac, go to System Settings → Privacy & Security
+→ Open Anyway; on Windows, More info → Run anyway.
+
+## Running it
 
 ```bash
 bun install
-cp .env.example .env
-# add BEARER_TOKEN to .env
-bun run engine import       # optional: imports data from adjacent projects
+cp .env.example .env        # fill in BEARER_TOKEN -- see below, it has to come from the registry
+bun run engine import       # seed from the older projects, if they are checked out beside this
 bun run dev                 # http://127.0.0.1:3000
 ```
 
-`HOST` defaults to `127.0.0.1`. Leave it that way unless you specifically need
-to reach the service from another device. For a phone or another trusted
-device, bind to the machine's Tailscale address or MagicDNS name, never
-`0.0.0.0`, and do not use a public tunnel, port forwarding, or Tailscale
-Funnel.
+`BEARER_TOKEN` has to be one issued at
+[cedarstalk.netlify.app](https://cedarstalk.netlify.app) --
+see [Running your own copy](#running-your-own-copy). Every instance,
+including this one, validates against that registry before it will start at
+all; a self-generated string will not work.
 
-The dashboard is at `/`; the OpenAPI document is at `/openapi.json`. API
-requests require `Authorization: Bearer <token>`.
+The dashboard is at `/`, the spec at `/openapi.json`, and every other route
+wants `Authorization: Bearer <token>`. It binds loopback unless you tell it
+otherwise, which you should think about before doing: this database holds ten
+thousand real people's rooms, phone numbers and inferred majors.
 
-## Collect data
-
-```bash
-bun run engine collect catalog 2027SP
-bun run engine collect catalog --all
-bun run engine collect book
-bun run engine collect campus
-bun run engine collect directory
-```
-
-Directory collection needs an authenticated Cedarville session. Keep session
-cookies and browser profiles under `data/`; that directory is intentionally
-ignored by Git. The Chrome extension in `extension/` can perform signed-in
-browser collection and send results back to a trusted local engine.
-
-## Security checklist
-
-- Keep the GitHub repository private.
-- Keep `.env`, `data/`, browser profiles, harvests, and SQLite files out of Git.
-- Use a unique bearer token and do not include it in screenshots, issues, or
-  launcher bundles.
-- Restrict remote access to your tailnet; the server contains sensitive,
-  person-level information.
-- Before every push, review `git status` and `git diff --cached`.
-
-## Development
+## Collecting
 
 ```bash
-bun run typecheck
-bun test
-bun run ci
+bun run engine collect catalog 2027SP   # a term of sections and courses
+bun run engine collect catalog --all    # every course that exists, offered or not
+bun run engine collect book             # the printed catalog, ~340 pages
+bun run engine collect campus           # OpenStreetMap plus the campus tour
+bun run engine collect directory        # the whole directory (needs a session)
 ```
 
-## License and provenance
+The catalog, the book and the map need nobody's permission — Colleague's course
+search, the publisher's page HTML and Overpass are all public. The directory is
+different: it is behind SSO, so `collect directory` needs a session cookie, from
+`DIRECTORY_COOKIE`, from `--cookie <file>`, or from the signed macOS helper that
+`cedarstalk-raycast` already installs.
 
-cedarstalk is an independently maintained, substantially modified derivative
-of cedarengine. The original MIT copyright notice and license are retained in
-[LICENSE.md](LICENSE.md), as required by that license.
+Booklists need a real browser, because the campus store sits behind an AWS WAF
+challenge. Two ways:
+
+```bash
+bun run engine harvester 2027SP         # a Tampermonkey script, ids baked in
+bun run engine ingest ~/Downloads/2027SP.json
+```
+
+...or the extension, which is the better answer.
+
+## The sync extension
+
+`extension/` is an unpacked Chrome extension that keeps the database current
+from the browser you are already signed into. Load it at
+`chrome://extensions` → Developer mode → Load unpacked, then paste the engine
+URL and the bearer token into its popup and press Save.
+
+It does no thinking of its own. It asks `/v1/sync/manifest` what is missing,
+runs those directory queries and booklist fetches with your own cookies, and
+posts the results back. Which name prefixes are still hiding rows, which
+students have no booklist yet, when a sweep has seen everybody — all of that
+stays on the server, so the extension never needs updating when the sweep logic
+gets smarter. It runs itself every twelve hours by default.
+
+## Guessing majors
+
+The campus store's booklist leaks `Department / Course / Section` for every book
+it wants to sell. Collected across the population and merged over terms, that is
+a course fingerprint, scored against all 79 degree programs by TF-IDF cosine:
+gen-eds everybody takes count for nothing, major-specific courses dominate.
+
+```bash
+bun run engine guess "First Last"
+bun run engine guess --all --out guesses.csv
+bun run engine labels data/labels/honors.csv   # known majors, for scoring
+bun run engine evaluate                        # logs accuracy to the metrics table
+```
+
+From one term of mostly-shared coursework it is a reliable **cluster**
+classifier (~75%) and a weak fine-grained one (~25% exact): it cannot split
+MechE from CompE when they share the freshman core. More semesters is the fix,
+and `evaluate` logs every run so the climb is visible.
+
+## Schedules
+
+The major model throws the section number away, because which lab slot somebody
+drew says nothing about what they study. For one question it says everything:
+`BIO-2500-01` is a row in the catalog, and that row carries the days, the hour
+and the room. So a list of books nobody meant to publish as a timetable is a
+timetable.
+
+```
+GET /v1/people/:id/schedule?term=2026FA
+```
+
+Sections with times and rooms, a Monday-to-Friday week with contact minutes per
+day, credits summed off the catalog, online sections held apart from the ones
+that meet, and the sections a booklist named that the catalog has never heard
+of. It is only as current as the last harvest — a course dropped in week three
+sits there until a sweep sees it gone, and `/v1/people/:id/history` is where
+that movement is written down. A section nobody assigned a book to never shows
+up at all.
+
+## The map
+
+`collect campus` pulls building outlines and every footpath, stair and service
+drive off OpenStreetMap, then anchors each one to the graph node nearest its
+edge — a door, near enough.
+
+Three sources, in order of how much they know. OpenStreetMap draws most of it.
+The halls OSM never traced come from Cedarville's own campus tour, whose
+polygons are fitted to real coordinates through its sixty-odd GPS markers. What
+neither has — the College View blocks, Cedar Park, the operations yard — is
+pinned in `src/collect/assets/pins.tsv`, positioned by fitting the university's
+printed campus map against the fifty buildings already placed, which lands
+within about eight metres across thirty-one anchors. Every pin carries a note
+saying where it came from.
+
+Two things worth knowing about that. The bounding box is drawn generously on
+purpose: the obvious box around the academic core cuts off the townhouses, the
+residence-life centres and the operations yard, which is three hundred people.
+And the directory's own name for a building is often nobody else's — Gromacki
+Hall is the 2013 townhouse OSM still calls "Townhouse 2" — so
+`src/collect/assets/buildings.tsv` maps the directory's shorthand onto the name
+each source uses, with fuzzy matching as the fallback rather than the rule.
+
+`/map` draws it: outlines in SVG, the walking graph underneath, buildings shaded
+by how many people are listed there, or by hall gender, or by which class holds
+the plurality. Pinned buildings are drawn as points rather than invented
+footprints, and the ones sharing a position — the four College View blocks, the
+three OPS shops — are one marker that breaks back down on hover.
+
+Since everybody in the directory already carries a dorm or an office, that is
+all it takes to put the whole population on the map:
+
+```
+GET /v1/campus/occupancy?by=class
+GET /v1/campus/route?from=Printy%20Hall&to=Engineering%20and%20Science%20Ctr
+GET /v1/people/:id/location
+```
+
+## History
+
+Every collector writes down what changed rather than only what is:
+
+```
+GET /v1/history/events?kind=vanished
+GET /v1/history/events?field=dorm_name
+GET /v1/history/population
+GET /v1/history/churn
+GET /v1/people/:id/history
+```
+
+One rule worth knowing: only a sweep that asked the whole name space can retire
+anybody. A resumed sweep skips the queries an earlier run finished, so most
+people were never asked about — retiring on that would graduate the whole
+school. `collect directory --refresh` is the one that counts.
+
+## On your phone
+
+`/mobile` is a small, separate page from the dashboard -- three things, one
+screen each: the quietest free rooms, a person's location right now, and who
+is scheduled to be in a building. It shares the dashboard's token gate, so the
+same bearer token unlocks both.
+
+**Reach it over Tailscale, never publicly.** This holds real students' dorm
+rooms and daily movements; it does not belong on the open internet under any
+circumstances -- no ngrok, no port forwarding, no Tailscale Funnel. Install
+Tailscale on the machine running the engine and on the phone, then set:
+
+```bash
+HOST=<the machine's own tailnet IP or MagicDNS name>   # not 0.0.0.0
+```
+
+and open `http://<that address>:3000/mobile` from the phone. `HOST` binds the
+server to that one address and nowhere else -- a stronger guarantee than a
+firewall rule, since there is no other interface for it to be listening on.
+
+Also useful: an iOS Shortcut can call the API directly over the same tailnet
+(`GET /v1/people/:id/location/now` with the bearer token in the header) for a
+one-tap Home Screen button, no browser needed.
+
+## Running your own copy
+
+`data/` never leaves the machine it was collected on -- it isn't
+in this repo, and nothing in it is shared by pointing another instance at his.
+The only thing distributed is the engine itself, empty, for you to fill with
+your own data from your own login.
+
+**1. Get a token.** [cedarstalk.netlify.app](https://cedarstalk.netlify.app)
+asks for your name, your `@cedarville.edu` email, and what you're running
+this on. It checks the email *looks like* a Cedarville address -- it does not
+send a verification email, because nobody's set up an account for that yet.
+The real gate is downstream: the token is only useful for an engine that
+itself needs a genuine Cedarville Self-Service login to collect anything, so
+a fake email gets you a token and nothing else.
+
+This step is not optional. Every instance of this engine -- the maintainer's own
+included, registered the same way as anyone else's -- validates its token
+against that registry before it will start at all, and every 30 minutes
+after that while it runs. A self-generated `BEARER_TOKEN` will not work; see
+[`src/lib/access-registry.ts`](src/lib/access-registry.ts) for exactly what
+gets sent (a bare request count, never which endpoints or who was looked up)
+and what a brief registry outage does and does not block.
+
+**2. Set it up.**
+
+```bash
+git clone https://github.com/leviholliday/cedarstalk.git
+cd cedarstalk
+bun install
+cp .env.example .env
+```
+
+Paste the token you were issued as `BEARER_TOKEN` in `.env`. Nothing else to
+configure -- the registry address is fixed in the engine itself, not an
+environment variable, so there is nowhere to point it somewhere else or leave
+it unset.
+
+**3. Sign into Self-Service once, then collect.**
+
+```bash
+bun run engine collect directory --refresh   # first sweep, from scratch
+bun run engine collect catalog               # this term's course catalog
+bun run dev                                  # http://127.0.0.1:3000
+```
+
+The directory sweep opens a real browser window for you to sign in through
+Cedarville's SSO. After that it can run unattended -- see
+[Collecting](#collecting) below for the headless path once you're set up.
+
+**Windows.** The headless directory sweep
+(`scripts/headless-directory.sh`) defaults to a Swift helper that only
+compiles on macOS. On Windows, use the cross-platform path instead:
+
+```bash
+bun run scripts/auth-session.ts <cookie-file>   # first run: pass HEADED=1 and sign in
+bun run engine collect directory --cookie <cookie-file>
+```
+
+The Raycast commands work on Raycast for Windows too -- all except live
+directory search, whose sign-in window is a Swift app and so Mac-only. `/`
+and `/mobile` (see [On your phone](#on-your-phone)) work in any browser, which
+covers Linux.
+
+## Hosting
+
+Kieran's own setup, kept from the original: same as everything else he runs,
+a systemd user service and a Caddy entry.
+
+```bash
+bun run build                       # -> dist/cedarstalk
+cp cedarstalk.service ~/.config/systemd/user/
+systemctl --user enable --now cedarstalk
+```
+
+```caddy
+http://cedarengine.dunkirk.sh {
+        bind unix/.cedarengine.dunkirk.sh.webserver.sock|777
+        reverse_proxy :38455
+}
+```
+
+<p align="center">
+    <img src="https://raw.githubusercontent.com/taciturnaxolotl/carriage/main/.github/images/line-break.svg" />
+</p>
+
+<p align="center">
+    <i><code>&copy; 2026-present <a href="https://dunkirk.sh">Kieran Klukas</a></code></i>
+</p>
+
+<p align="center">
+    <a href="https://tangled.org/dunkirk.sh/cedarengine/blob/main/LICENSE.md"><img src="https://img.shields.io/static/v1.svg?style=for-the-badge&label=License&message=MIT&logoColor=d9e0ee&colorA=363a4f&colorB=b7bdf8"/></a>
+</p>

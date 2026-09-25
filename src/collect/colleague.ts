@@ -131,7 +131,7 @@ export class GuestColleague {
   }
 }
 
-const USER_AGENT = "cedarstalk";
+const USER_AGENT = "cedarstalk (a fork of github.com/taciturnaxolotl/cedarengine by Kieran Klukas)";
 
 /**
  * The courses that satisfy one requirement group, as Colleague itself decides.

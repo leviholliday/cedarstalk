@@ -21,7 +21,7 @@
       body {
         background: var(--bg); color: var(--ink); overflow-x: hidden; min-height: 100vh;
         font: 14px/1.6 "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
-        display: grid; justify-items: center; align-items: start; padding: max(2rem, 12vh) 1rem 3rem;
+        display: grid; justify-items: center; align-items: start; align-content: start; padding: max(2rem, 12vh) 1rem 3rem;
       }
       .blobs { position: fixed; inset: 0; z-index: 0; overflow: hidden; filter: blur(70px); }
       .blob { position: absolute; border-radius: 50%; opacity: 0.5; animation: drift 18s ease-in-out infinite alternate; }
@@ -82,6 +82,8 @@
       /* hidden until the web fonts land, so the swap never reflows visibly */
       main { opacity: 0; }
       html.ready main { opacity: 1; transition: opacity 0.35s ease; }
+      .credit { position: relative; z-index: 1; text-align: center; font-size: 11.5px; color: var(--dim); margin-top: 1.4rem; }
+      .credit a { color: var(--dim); }
     </style>
   </head>
   <body>
@@ -105,6 +107,7 @@
       <p class="tag" id="tag">almost there</p>
       <div id="app"></div>
     </main>
+    <p class="credit">built on <a href="https://tangled.org/dunkirk.sh/cedarengine" target="_blank">cedarengine</a> by <a href="https://dunkirk.sh" target="_blank">Kieran Klukas</a></p>
 
     <script type="module">
       const KEY = "cedarengine.token";
