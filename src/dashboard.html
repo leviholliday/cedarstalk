@@ -143,6 +143,18 @@
 
     <script type="module">
       const KEY = "cedarengine.token";
+      // Opened by the launcher or desktop shortcut: trade its one-time key for
+      // the token, so this works in whichever browser the window opened in.
+      const launchKey = new URLSearchParams(location.search).get("key");
+      if (launchKey) {
+        const claimed = await fetch("/setup/claim", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ key: launchKey }),
+        }).catch(() => null);
+        if (claimed?.ok) localStorage.setItem(KEY, (await claimed.json()).token);
+        history.replaceState(null, "", location.pathname);
+      }
       const el = document.getElementById("body");
       const foot = document.getElementById("foot");
       const tip = document.getElementById("tip");

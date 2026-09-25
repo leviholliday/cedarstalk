@@ -42,16 +42,14 @@ install_raycast_app() {
   read -r -p "  Raycast just opened -- click through its welcome screens, then press Return here. " _
 }
 
-if app="$(raycast_app)"; then
-  if [ "$ASK" = --ask ]; then
-    read -r -p "  Add the cedarstalk commands to Raycast? [Y/n] " answer
-    case "$answer" in [nN]*) exit 0 ;; esac
-  fi
-else
-  if [ "$ASK" = --ask ]; then
-    read -r -p "  Want Raycast too? It's a free launcher app, and cedarstalk adds its commands to it. [y/N] " answer
-    case "$answer" in [yY]*) ;; *) exit 0 ;; esac
-  fi
+if [ "$ASK" = --ask ]; then
+  read -r -p "  Add the cedarstalk commands to Raycast (a free launcher app)? [Y/n] " answer
+  case "$answer" in [nN]*) exit 0 ;; esac
+fi
+# No need to ask whether Raycast is installed -- just look.
+if ! raycast_app >/dev/null; then
+  read -r -p "  Raycast isn't on this Mac yet. Install it now? [Y/n] " answer
+  case "$answer" in [nN]*) exit 0 ;; esac
   install_raycast_app || { echo "  Skipping Raycast -- cedarstalk itself still works."; exit 0; }
 fi
 

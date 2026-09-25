@@ -21,5 +21,10 @@ if [ ! -f data/.raycast-asked ]; then
   bash scripts/install-raycast.sh "$BUN" --ask
 fi
 
+if [ ! -f data/.shortcut-made ]; then
+  mkdir -p data && touch data/.shortcut-made
+  bash scripts/make-mac-app.sh || true
+fi
+
 CEDARSTALK_OPEN=1 "$BUN" run src/index.ts
 read -r -p "  cedarstalk stopped. Press Return to close." _

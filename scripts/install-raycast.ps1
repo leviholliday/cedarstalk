@@ -35,10 +35,10 @@ function Install-Raycast {
 }
 
 try {
-  if (Test-Raycast) {
-    if ($Ask -and (Read-Host "  Add the cedarstalk commands to Raycast? [Y/n]") -match "^[nN]") { exit 0 }
-  } else {
-    if ($Ask -and (Read-Host "  Want Raycast too? It's a free launcher app, and cedarstalk adds its commands to it. [y/N]") -notmatch "^[yY]") { exit 0 }
+  if ($Ask -and (Read-Host "  Add the cedarstalk commands to Raycast (a free launcher app)? [Y/n]") -match "^[nN]") { exit 0 }
+  # No need to ask whether Raycast is installed -- just look.
+  if (-not (Test-Raycast)) {
+    if ((Read-Host "  Raycast isn't on this computer yet. Install it now? [Y/n]") -match "^[nN]") { exit 0 }
     Install-Raycast
   }
 

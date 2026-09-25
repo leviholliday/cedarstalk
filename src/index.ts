@@ -12,6 +12,7 @@
  */
 
 import { spawn } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { createWriteStream, existsSync, mkdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { serve } from "bun";
@@ -101,6 +102,51 @@ async function collectPublicSources(): Promise<void> {
 
 // ---- setup ---------------------------------------------------------------
 
+let launchKey: { key: string; until: number } | null = null;
+let origin = "";
+
+/** Chrome or Edge can open a page as its own app window, with no tabs or address bar. */
+function appBrowser(): { command: string; args: (url: string) => string[] } | null {
+  const env = process.env;
+  if (process.platform === "win32") {
+    const exe = [
+      `${env.ProgramFiles}\\Google\\Chrome\\Application\\chrome.exe`,
+      `${env["ProgramFiles(x86)"]}\\Google\\Chrome\\Application\\chrome.exe`,
+      `${env.LOCALAPPDATA}\\Google\\Chrome\\Application\\chrome.exe`,
+      `${env["ProgramFiles(x86)"]}\\Microsoft\\Edge\\Application\\msedge.exe`,
+      `${env.ProgramFiles}\\Microsoft\\Edge\\Application\\msedge.exe`,
+    ].find((p) => !p.startsWith("undefined") && existsSync(p));
+    return exe ? { command: exe, args: (url) => [`--app=${url}`] } : null;
+  }
+  if (process.platform === "darwin") {
+    const app = ["/Applications/Google Chrome.app", "/Applications/Microsoft Edge.app", "/Applications/Brave Browser.app"].find(
+      (p) => existsSync(p),
+    );
+    return app ? { command: "open", args: (url) => ["-na", app, "--args", `--app=${url}`] } : null;
+  }
+  return null;
+}
+
+function openInBrowser(url: string): void {
+  const opener =
+    process.platform === "win32"
+      ? spawn("cmd", ["/c", "start", "", url], { stdio: "ignore" })
+      : spawn(process.platform === "darwin" ? "open" : "xdg-open", [url], { stdio: "ignore" });
+  opener.on("error", () => {});
+}
+
+/** First run: setup in the normal browser (where the extension gets loaded). After that: the app window. */
+function openWindow(): void {
+  if (!token) return openInBrowser(`${origin}/setup`);
+  launchKey = { key: randomBytes(24).toString("hex"), until: Date.now() + 120_000 };
+  const url = `${origin}/?key=${launchKey.key}`;
+  const app = appBrowser();
+  if (!app) return openInBrowser(url);
+  const child = spawn(app.command, app.args(url), { stdio: "ignore", detached: true });
+  child.on("error", () => openInBrowser(url));
+  child.unref();
+}
+
 /** The packaged download keeps a top-level "Browser extension" copy; a clone only has extension/. */
 const extensionFolder = existsSync(resolve("../Browser extension"))
   ? resolve("../Browser extension")
@@ -108,7 +154,28 @@ const extensionFolder = existsSync(resolve("../Browser extension"))
 
 const setupRoutes = {
   "/setup": setup,
-  "/setup/state": () => json({ configured: Boolean(token), collecting: firstCollect, extensionFolder }),
+  "/setup/state": () =>
+    json({ configured: Boolean(token), collecting: firstCollect, extensionFolder, installDir: resolve(".") }),
+  // A second launch (the desktop shortcut while this is already running) asks
+  // this copy to open a window rather than starting another one. JSON-only,
+  // so a web page can't trigger it cross-origin without a CORS preflight.
+  "/setup/open": {
+    POST: (request: Request) => {
+      if (!request.headers.get("content-type")?.includes("application/json")) return json({ error: "json only" }, 415);
+      openWindow();
+      return json({ ok: true });
+    },
+  },
+  // The window opened by the launcher carries a one-time key, traded here for
+  // the token so the dashboard is unlocked in whichever browser it opened in.
+  "/setup/claim": {
+    POST: async (request: Request) => {
+      const body = (await request.json().catch(() => ({}))) as { key?: string };
+      const valid = launchKey && token && body.key === launchKey.key && Date.now() < launchKey.until;
+      launchKey = null;
+      return valid ? json({ token }) : json({ error: "expired" }, 403);
+    },
+  },
   "/setup/token": {
     POST: async (request: Request): Promise<Response> => {
       if (token) return json({ error: "already set up" }, 409);
@@ -175,6 +242,24 @@ function listen(port: number): ReturnType<typeof serve> {
 
 // Launched by double-click with nobody choosing a port: step off a busy 3000
 // (another copy already running) instead of failing.
+// The shortcut launched while this install is already running: open a window
+// in the running copy and leave, instead of starting a second one.
+if (launched && config.portIsDefault) {
+  for (let port = config.port; port < config.port + 10; port++) {
+    const state = (await fetch(`http://127.0.0.1:${port}/setup/state`, { signal: AbortSignal.timeout(800) })
+      .then((r) => r.json())
+      .catch(() => null)) as { installDir?: string } | null;
+    if (state?.installDir !== resolve(".")) continue;
+    await fetch(`http://127.0.0.1:${port}/setup/open`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{}",
+    }).catch(() => {});
+    console.log("  cedarstalk is already running -- opened a window for it.");
+    process.exit(0);
+  }
+}
+
 let server: ReturnType<typeof serve>;
 for (let port = config.port; ; port++) {
   try {
@@ -189,7 +274,7 @@ for (let port = config.port; ; port++) {
 // Analytics are for shape, not for keeping. Thirty days of rows is plenty and
 // the trim costs nothing, so it happens at boot rather than on a schedule.
 const trimmed = trim();
-const origin = `http://${server.hostname}:${server.port}`;
+origin = `http://${server.hostname}:${server.port}`;
 
 console.log(`cedarstalk ${version} on ${origin}`);
 console.log(`  ${routes.length} routes  ·  ${config.databasePath}`);
@@ -209,10 +294,5 @@ if (token) {
 
 if (launched) {
   console.log("  Leave this window open while you use cedarstalk. Close it to stop.\n");
-  const page = `${origin}/setup`;
-  const opener =
-    process.platform === "win32"
-      ? spawn("cmd", ["/c", "start", "", page], { stdio: "ignore" })
-      : spawn(process.platform === "darwin" ? "open" : "xdg-open", [page], { stdio: "ignore" });
-  opener.on("error", () => {});
+  openWindow();
 }

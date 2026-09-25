@@ -55,6 +55,10 @@ add the Raycast commands, installing Raycast itself if you want it (the real, si
 one from raycast.com on a Mac, the Microsoft Store one on Windows) -- or double-click
 **Add to Raycast** later.
 
+The first run also puts a **cedarstalk** icon on the Desktop (and in Applications on a Mac).
+It opens cedarstalk in its own window -- Chrome or Edge in app mode -- starting it first if it
+isn't running.
+
 The first time, macOS or Windows warns the launcher is from an unidentified developer: on a Mac,
 System Settings → Privacy & Security → Open Anyway; on Windows, More info → Run anyway. Keep the
 window that opens running while you use it.
@@ -298,10 +302,10 @@ bun run scripts/auth-session.ts <cookie-file>   # first run: pass HEADED=1 and s
 bun run engine collect directory --cookie <cookie-file>
 ```
 
-The Raycast commands work on Raycast for Windows too -- all except live
-directory search, whose sign-in window is a Swift app and so Mac-only. `/`
-and `/mobile` (see [On your phone](#on-your-phone)) work in any browser, which
-covers Linux.
+The Raycast commands all work on Raycast for Windows too. Live directory
+search signs in through Microsoft Edge there (or Chrome), where the Mac uses
+a small Swift window. `/` and `/mobile` (see [On your phone](#on-your-phone))
+work in any browser, which covers Linux.
 
 ## Hosting
 

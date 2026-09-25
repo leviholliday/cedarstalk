@@ -27,6 +27,12 @@ if not exist "data\.raycast-asked" (
   powershell -NoProfile -ExecutionPolicy Bypass -File "scripts\install-raycast.ps1" -Bun "%BUN%" -Ask
 )
 
+if not exist "data\.shortcut-made" (
+  if not exist data mkdir data
+  type nul > "data\.shortcut-made"
+  powershell -NoProfile -ExecutionPolicy Bypass -File "scripts\make-shortcut.ps1"
+)
+
 set CEDARSTALK_OPEN=1
 "%BUN%" run src\index.ts
 echo.
