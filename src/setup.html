@@ -154,6 +154,45 @@
         $("tok").onkeydown = (e) => { if (e.key === "Enter") submit(); };
       }
 
+      // Every Chromium browser has its own address for the extensions page, and
+      // none of them can be linked to from a web page -- so copy, don't link.
+      const BROWSERS = {
+        chrome: { name: "Chrome", page: "chrome://extensions" },
+        edge: { name: "Edge", page: "edge://extensions" },
+        brave: { name: "Brave", page: "brave://extensions" },
+        opera: { name: "Opera", page: "opera://extensions" },
+        vivaldi: { name: "Vivaldi", page: "vivaldi://extensions" },
+        arc: { name: "Arc", page: "chrome://extensions" },
+      };
+      function detectBrowser() {
+        const ua = navigator.userAgent;
+        if (/Firefox\//.test(ua)) return "firefox";
+        if (/Safari\//.test(ua) && !/Chrome\//.test(ua)) return "safari";
+        if (/Edg\//.test(ua)) return "edge";
+        if (/OPR\//.test(ua)) return "opera";
+        if (/Vivaldi/.test(ua)) return "vivaldi";
+        if (navigator.brave) return "brave";
+        if (getComputedStyle(document.documentElement).getPropertyValue("--arc-palette-title")) return "arc";
+        return "chrome";
+      }
+      function showBrowser(key) {
+        const b = BROWSERS[key];
+        const others = Object.keys(BROWSERS).filter((k) => k !== key);
+        if (!b) {
+          $("browserLine").innerHTML = `This extension needs <b>Chrome</b>, <b>Edge</b>, Brave, Arc, Opera or Vivaldi — it doesn't run in ${key === "firefox" ? "Firefox" : "Safari"}. Open this page in one of those instead.`;
+          $("copyExt").style.display = "none";
+        } else {
+          $("browserLine").innerHTML = `Looks like you're using <b>${b.name}</b>. Its extensions page is <code>${b.page}</code>.`;
+          $("copyExt").style.display = "";
+          $("copyExt").textContent = `Copy ${b.page}`;
+          copyButton("copyExt", b.page);
+        }
+        $("browserSwitch").innerHTML = "Not right? " + others.map((k) => `<a href="#" data-browser="${k}">${BROWSERS[k].name}</a>`).join(" · ");
+        for (const a of $("browserSwitch").querySelectorAll("a")) {
+          a.onclick = (e) => { e.preventDefault(); showBrowser(a.dataset.browser); };
+        }
+      }
+
       function copyButton(id, text) {
         const b = $(id);
         b.onclick = async () => { await navigator.clipboard.writeText(text); b.textContent = "Copied ✓"; };
@@ -170,12 +209,14 @@
             <div class="step"><span class="dot ok">✓</span><b>Token saved</b>
               <p id="collect">Downloading the course catalog and campus map in the background…</p></div>
             <div class="step"><span class="dot wait" id="extDot">2</span><b>Add the sync extension</b>
-              <p>In Chrome or Edge, go to <code>chrome://extensions</code> (Edge: <code>edge://extensions</code>),
-              turn on <b>Developer mode</b>, click <b>Load unpacked</b>, and pick this folder:</p>
+              <p id="browserLine"></p>
+              <p><button class="copy" id="copyExt"></button>
+              <span style="font-size:11.5px">then paste into your address bar and press Enter. Browsers don't let websites open this page for you.</span></p>
+              <p id="browserSwitch" style="font-size:11.5px"></p>
+              <p>There, turn on <b>Developer mode</b>, click <b>Load unpacked</b>, and pick this folder:</p>
               <p><code id="extPath">the "Browser extension" folder inside cedarstalk</code></p>
               <p><button class="copy" id="copyPath">Copy folder path</button>
-              <span style="font-size:11.5px">— paste it into the folder picker (Mac: press <b>⌘⇧G</b> first)</span></p>
-              <p><button class="copy" id="copyExt">Copy chrome://extensions</button></p>
+              <span style="font-size:11.5px">— paste it into the folder picker${isMac ? " (press <b>⌘⇧G</b> first)" : "'s address box"}</span></p>
               <p id="extState">Then come back to this tab — it connects by itself.</p></div>
             ${raycast ? `<div class="step"><span class="dot">3</span><b>Raycast (optional)</b>
               <p>If you said yes in the launcher, it's installed. If not, double-click <code>${addFile}</code>
@@ -186,7 +227,7 @@
               <p>That window is cedarstalk running. Next time, double-click <b>Start on Mac</b> or the Desktop <b>cedarstalk</b> shortcut.</p></div>
           </div>
           <a class="btn" href="/">Open cedarstalk</a>`;
-        copyButton("copyExt", "chrome://extensions");
+        showBrowser(detectBrowser());
         getJSON("/setup/state").then(({ extensionFolder }) => {
           if (!extensionFolder) return;
           $("extPath").textContent = extensionFolder;

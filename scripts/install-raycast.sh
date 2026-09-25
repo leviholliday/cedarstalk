@@ -67,13 +67,38 @@ ln -sf "$BUN" "$SHIM/node"
 export PATH="$SHIM:$PATH"
 
 cd "$DIR" || exit 0
-"$BUN" install >/dev/null 2>&1
+LOG="$HOME/.cedarstalk/raycast-install.log"
+: > "$LOG"
+echo "  Installing what the commands need..."
+"$BUN" install >>"$LOG" 2>&1
 
-echo "  Adding them to Raycast (takes about 20 seconds)..."
+# Raycast runs each command from ~/.config/raycast/extensions/<name>. Build
+# straight into it and wait until every command is really there -- a fixed
+# timer stopped too early on slower machines and left "missing executable".
+NAME="$("$BUN" -e 'console.log(require("./package.json").name)')"
+COMMANDS="$("$BUN" -e 'console.log(require("./package.json").commands.map(c=>c.name).join(" "))')"
+OUT="$HOME/.config/raycast/extensions/$NAME"
+built() { for c in $COMMANDS; do [ -f "$OUT/$c.js" ] || return 1; done; [ -d "$OUT/assets" ]; }
+
+echo "  Building the commands (this can take a minute the first time)..."
+./node_modules/.bin/ray build -e dev -o "$OUT" >>"$LOG" 2>&1
+if ! built; then
+  echo "  The build didn't finish. The end of the log ($LOG):"
+  tail -n 15 "$LOG" | sed 's/^/    /'
+  exit 0
+fi
+
+echo "  Adding them to Raycast..."
 open -a Raycast
-./node_modules/.bin/ray develop >/dev/null 2>&1 &
+STAMP="$(date +%s)"
+./node_modules/.bin/ray develop >>"$LOG" 2>&1 &
 DEV=$!
-sleep 25
+# develop rebuilds and registers with Raycast; wait for that rebuild to land.
+for _ in $(seq 1 90); do
+  sleep 2
+  [ "$(stat -f %m "$OUT/package.json" 2>/dev/null || echo 0)" -ge "$STAMP" ] && built && break
+done
+sleep 4
 kill "$DEV" 2>/dev/null
 wait "$DEV" 2>/dev/null
 echo "  Done -- open Raycast and type \"cedarstalk\". It asks for your token the first time."

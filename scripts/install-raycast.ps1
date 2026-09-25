@@ -60,12 +60,44 @@ try {
   $env:PATH = "$shim;$env:PATH"
 
   Push-Location $dir
-  & $Bun install | Out-Null
-  Write-Host "  Adding them to Raycast (about 30 seconds)..."
+  $log = Join-Path $root "raycast-install.log"
+  Set-Content $log ""
+  Write-Host "  Installing what the commands need..."
+  & $Bun install *>> $log
+
+  # Raycast runs each command from ~\.config\raycast\extensions\<name>. Build
+  # straight into it and wait until every command is really there -- a fixed
+  # timer stopped too early and left "missing executable" and no icons.
+  $manifest = Get-Content "package.json" -Raw | ConvertFrom-Json
+  $out = Join-Path $env:USERPROFILE ".config\raycast\extensions\$($manifest.name)"
+  $node = Join-Path $shim "node.exe"
+  $ray = "node_modules/@raycast/api/bin/run.js"
+  function Test-Built {
+    foreach ($c in $manifest.commands) { if (-not (Test-Path (Join-Path $out "$($c.name).js"))) { return $false } }
+    return (Test-Path (Join-Path $out "assets"))
+  }
+
+  Write-Host "  Building the commands (this can take a minute the first time)..."
+  & $node $ray build -e dev -o $out *>> $log
+  if (-not (Test-Built)) {
+    Write-Host "  The build didn't finish. The end of the log ($log):"
+    Get-Content $log -Tail 15 | ForEach-Object { Write-Host "    $_" }
+    Pop-Location
+    exit 0
+  }
+
+  Write-Host "  Adding them to Raycast..."
   Start-Raycast
-  $dev = Start-Process -FilePath (Join-Path $shim "node.exe") `
-    -ArgumentList "node_modules/@raycast/api/bin/run.js", "develop" -PassThru -WindowStyle Hidden
-  Start-Sleep -Seconds 30
+  $stamp = Get-Date
+  $dev = Start-Process -FilePath $node -ArgumentList $ray, "develop" -PassThru -WindowStyle Hidden `
+    -RedirectStandardOutput (Join-Path $root "raycast-develop.log") -RedirectStandardError (Join-Path $root "raycast-develop-err.log")
+  # develop rebuilds and registers with Raycast; wait for that rebuild to land.
+  for ($i = 0; $i -lt 90; $i++) {
+    Start-Sleep -Seconds 2
+    $pkg = Get-Item (Join-Path $out "package.json") -ErrorAction SilentlyContinue
+    if ($pkg -and $pkg.LastWriteTime -ge $stamp -and (Test-Built)) { break }
+  }
+  Start-Sleep -Seconds 4
   taskkill /T /F /PID $dev.Id 2>$null | Out-Null
   Pop-Location
   Write-Host "  Done -- open Raycast and type ""cedarstalk"". It asks for your token the first time."
