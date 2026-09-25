@@ -12,7 +12,7 @@
  */
 
 import { spawn } from "node:child_process";
-import { createWriteStream, mkdirSync } from "node:fs";
+import { createWriteStream, existsSync, mkdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { serve } from "bun";
 import { version } from "../package.json";
@@ -101,9 +101,14 @@ async function collectPublicSources(): Promise<void> {
 
 // ---- setup ---------------------------------------------------------------
 
+/** The packaged download keeps a top-level "Browser extension" copy; a clone only has extension/. */
+const extensionFolder = existsSync(resolve("../Browser extension"))
+  ? resolve("../Browser extension")
+  : resolve("extension");
+
 const setupRoutes = {
   "/setup": setup,
-  "/setup/state": () => json({ configured: Boolean(token), collecting: firstCollect }),
+  "/setup/state": () => json({ configured: Boolean(token), collecting: firstCollect, extensionFolder }),
   "/setup/token": {
     POST: async (request: Request): Promise<Response> => {
       if (token) return json({ error: "already set up" }, 409);

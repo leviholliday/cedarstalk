@@ -171,8 +171,10 @@
               <p id="collect">Downloading the course catalog and campus map in the background…</p></div>
             <div class="step"><span class="dot wait" id="extDot">2</span><b>Add the sync extension</b>
               <p>In Chrome or Edge, go to <code>chrome://extensions</code> (Edge: <code>edge://extensions</code>),
-              turn on <b>Developer mode</b>, click <b>Load unpacked</b>, and pick the <code>extension</code> folder
-              inside the cedarstalk folder you unzipped.</p>
+              turn on <b>Developer mode</b>, click <b>Load unpacked</b>, and pick this folder:</p>
+              <p><code id="extPath">the "Browser extension" folder inside cedarstalk</code></p>
+              <p><button class="copy" id="copyPath">Copy folder path</button>
+              <span style="font-size:11.5px">— paste it into the folder picker (Mac: press <b>⌘⇧G</b> first)</span></p>
               <p><button class="copy" id="copyExt">Copy chrome://extensions</button></p>
               <p id="extState">Then come back to this tab — it connects by itself.</p></div>
             ${raycast ? `<div class="step"><span class="dot">3</span><b>Raycast (optional)</b>
@@ -181,10 +183,15 @@
               It'll ask for your token once${port !== "3000" ? ` and the address <code>${escape(location.origin)}</code>` : ""}.</p>
               <p><button class="copy" id="copyTok">Copy token</button></p></div>` : ""}
             <div class="step"><span class="dot">${raycast ? 4 : 3}</span><b>Keep the launcher window open</b>
-              <p>That window is cedarstalk running. Next time, just double-click the launcher again.</p></div>
+              <p>That window is cedarstalk running. Next time, double-click <b>Start on Mac</b> or the Desktop <b>cedarstalk</b> shortcut.</p></div>
           </div>
           <a class="btn" href="/">Open cedarstalk</a>`;
         copyButton("copyExt", "chrome://extensions");
+        getJSON("/setup/state").then(({ extensionFolder }) => {
+          if (!extensionFolder) return;
+          $("extPath").textContent = extensionFolder;
+          copyButton("copyPath", extensionFolder);
+        });
         if (raycast) copyButton("copyTok", token);
         connectExtension(token);
         watchCollect();

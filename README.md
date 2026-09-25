@@ -43,16 +43,22 @@ if you write it down each time you look.
 
 ## The easy way
 
-1. Get a token and the download at [cedarstalk.netlify.app](https://cedarstalk.netlify.app), and unzip it.
-2. Double-click **`Start cedarstalk.command`** (Mac) or **`Start cedarstalk.cmd`** (Windows).
-   The first run installs [Bun](https://bun.sh) from its official installer and opens a setup page.
-3. Paste your token there. It walks you through loading the `extension` folder in Chrome or Edge,
-   which then connects itself and starts syncing. The launcher also offers to add the Raycast
-   commands (Mac or Windows); if you skip it, double-click `Add to Raycast` later.
+Go to [cedarstalk.netlify.app](https://cedarstalk.netlify.app), download, and get a token.
 
-Leave the launcher window open while you use it. The first time, macOS or Windows will warn that
-the launcher is from an unidentified developer: on a Mac, go to System Settings → Privacy & Security
-→ Open Anyway; on Windows, More info → Run anyway.
+- **Windows:** run the *cedarstalk Windows installer*. It installs into your user folder,
+  adds a **cedarstalk** shortcut to the Desktop, and starts it.
+- **Mac:** open the download (a tidy `cedarstalk` folder) and double-click **Start on Mac**.
+
+Then paste your token into the page that opens. It shows exactly which folder to load as the
+browser extension (which then connects itself and starts syncing), and the launcher offers to
+add the Raycast commands -- or double-click **Add to Raycast** later.
+
+The first time, macOS or Windows warns the launcher is from an unidentified developer: on a Mac,
+System Settings → Privacy & Security → Open Anyway; on Windows, More info → Run anyway. Keep the
+window that opens running while you use it.
+
+The download is built by `scripts/build-package.sh` (run by a GitHub Action on every push) from
+committed files only, and published as the `cedarstalk.zip` asset on the `latest` release.
 
 ## Running it
 
