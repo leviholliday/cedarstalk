@@ -10,7 +10,7 @@
  * Imported as text rather than read off disk with `fs`: `bun build --compile`
  * embeds an imported asset into the binary, but a relative `readFileSync`
  * would go looking for a `src/collect/assets/` directory that doesn't exist
- * next to the compiled `dist/cedarengine` binary.
+ * next to the compiled `dist/cedarstalk` binary.
  */
 
 import usCitiesTsv from "../collect/assets/us-cities.tsv" with { type: "text" };

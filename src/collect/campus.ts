@@ -38,7 +38,7 @@ const OVERPASS = [
   "https://overpass-api.de/api/interpreter",
   "https://overpass.kumi.systems/api/interpreter",
 ];
-const USER_AGENT = "cedarengine (github.com/taciturnaxolotl/cedarengine)";
+const USER_AGENT = "cedarstalk";
 
 /**
  * Ways you can actually walk, and how much you mind walking them. A footpath

@@ -140,7 +140,7 @@ export function parseTour(xml: string): TourFit {
 
 export async function fetchTour(): Promise<TourFit> {
   const response = await fetch(SOURCE, {
-    headers: { "user-agent": "cedarengine (github.com/taciturnaxolotl/cedarengine)" },
+    headers: { "user-agent": "cedarstalk" },
   });
   if (!response.ok) throw new Error(`campus tour returned HTTP ${response.status}`);
   return parseTour(await response.text());

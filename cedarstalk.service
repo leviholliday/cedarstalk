@@ -1,0 +1,15 @@
+[Unit]
+Description=cedarstalk local research API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+WorkingDirectory=%h/cedarstalk
+ExecStart=%h/cedarstalk/dist/cedarstalk
+EnvironmentFile=%h/cedarstalk/.env
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=default.target

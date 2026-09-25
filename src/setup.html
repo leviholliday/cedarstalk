@@ -159,6 +159,8 @@
       function steps(token) {
         $("tag").textContent = "you're in — a few last things";
         const isMac = /Mac/.test(navigator.platform);
+        const raycast = isMac || /Win/.test(navigator.platform);
+        const addFile = isMac ? "Add to Raycast.command" : "Add to Raycast.cmd";
         const port = location.port || "80";
         app.innerHTML = `
           <div>
@@ -170,16 +172,17 @@
               inside the cedarstalk folder you unzipped.</p>
               <p><button class="copy" id="copyExt">Copy chrome://extensions</button></p>
               <p id="extState">Then come back to this tab — it connects by itself.</p></div>
-            ${isMac ? `<div class="step"><span class="dot">3</span><b>Raycast (optional)</b>
-              <p>If the launcher installed it, open Raycast and run any cedarstalk command.
+            ${raycast ? `<div class="step"><span class="dot">3</span><b>Raycast (optional)</b>
+              <p>If you said yes in the launcher, it's installed. If not, double-click <code>${addFile}</code>
+              in the cedarstalk folder. Then open Raycast and run any cedarstalk command.
               It'll ask for your token once${port !== "3000" ? ` and the address <code>${escape(location.origin)}</code>` : ""}.</p>
               <p><button class="copy" id="copyTok">Copy token</button></p></div>` : ""}
-            <div class="step"><span class="dot">${isMac ? 4 : 3}</span><b>Keep the launcher window open</b>
+            <div class="step"><span class="dot">${raycast ? 4 : 3}</span><b>Keep the launcher window open</b>
               <p>That window is cedarstalk running. Next time, just double-click the launcher again.</p></div>
           </div>
           <a class="btn" href="/">Open cedarstalk</a>`;
         copyButton("copyExt", "chrome://extensions");
-        if (isMac) copyButton("copyTok", token);
+        if (raycast) copyButton("copyTok", token);
         connectExtension(token);
         watchCollect();
       }

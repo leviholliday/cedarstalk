@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "bun run --watch src/index.ts",
     "start": "bun run src/index.ts",
-    "build": "bun build --compile --outfile dist/cedarengine --production ./src/index.ts",
+    "build": "bun build --compile --outfile dist/cedarstalk --production ./src/index.ts",
     "engine": "bun run src/cli.ts",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
